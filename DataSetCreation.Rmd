@@ -1,0 +1,214 @@
+---
+title: "DataSetCreation"
+author: "Lisa"
+date: "3/16/2021"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+```{r}
+library(lme4) #Add package for lmer (mixed effects modeling)
+library(stats) #package contains extractAIC
+library(MuMIn) #package for R squared
+library(stringr)
+library(dplyr)
+library(MASS)
+library(pscl)
+library(msme)
+library(dotwhisker)
+library(broom)
+setwd("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs")
+```
+
+#Read in data
+```{r}
+wetlandData <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/20200312_wetlandData.csv")
+```
+
+#Create sample
+```{r}
+#library(dplyr)
+#set.seed(4725)
+#set.seed(2547)
+RNGkind(sample.kind = "Rounding")
+set.seed(123)
+CWdat <- subset(wetlandData, wetlandData$data == "GLCWMP")
+CWdat$key2 <- paste(CWdat$key, CWdat$year) #create a new key so that different years at the same site will be treated as unique
+uCW <- data.frame(key2 = unique(CWdat$key2)) #create list of unique wetland-point-years
+tCW <- sample_n(uCW, round(nrow(uCW)*.66)) #take a random sample of the unique wetland-point-years 
+tCWdat <- CWdat[(CWdat$key2 %in% tCW$key2),] #create training data set from the random sample
+vCWdat <- CWdat[!(CWdat$key2 %in% tCW$key2),] #create validation data set
+length(unique(tCWdat$key2)) #check that the correct number of unique wetlands are there
+length(unique(vCWdat$key2))
+
+
+#library(dplyr)
+#set.seed(4725)
+#set.seed(2547)
+#RNGkind(sample.kind = "Rounding")
+#set.seed(123)
+PPdat <- subset(wetlandData, wetlandData$data == "PPDWMP")
+PPdat$count <- round(PPdat$count)
+PPdat$key2 <- paste(PPdat$key, PPdat$year) #create a new key so that different years at the same site will be treated as unique
+uPP <- data.frame(key2 = unique(PPdat$key2)) #create list of unique wetland-point-years
+tPP<- sample_n(uPP, round(nrow(uPP)*.66)) #take a random sample of the unique wetland-point-years 
+tPPdat <- PPdat[(PPdat$key2 %in% tPP$key2),] #create training data set from the random sample
+vPPdat <- PPdat[!(PPdat$key2 %in% tPP$key2),] #create validation data set
+length(unique(tPPdat$key2)) #check that the correct number of unique wetlands are there
+length(unique(vPPdat$key2))
+
+#library(dplyr)
+#set.seed(4725)
+#et.seed(2547)
+#RNGkind(sample.kind = "Rounding")
+#set.seed(123)
+MMdat <- subset(wetlandData, wetlandData$data == "GLMMP")
+MMdat$key2 <- paste(MMdat$key, MMdat$year) #create a new key so that different years at the same site will be treated as unique
+uMM <- data.frame(key2 = unique(MMdat$key2)) #create list of unique wetland-point-years
+tMM <- sample_n(uMM, round(nrow(uMM)*.66)) #take a random sample of the unique wetland-point-years 
+tMMdat <- MMdat[(MMdat$key2 %in% tMM$key2),] #create training data set from the random sample
+vMMdat <- MMdat[!(MMdat$key2 %in% tMM$key2),] #create validation data set
+length(unique(tMMdat$key2)) #check that the correct number of unique wetlands are there
+length(unique(vMMdat$key2))
+```
+
+#Combine regions into Training and Validation datasets
+```{r}
+trainingData <- rbind(tCWdat, tPPdat, tMMdat)
+validationData <- rbind(vCWdat, vPPdat, vMMdat)
+#PPdat$count will need to be rounded to handle the 0.5 breeding pair issue--to be equivalent to the other data sets, these individuals should be counted as 1, not 0.5. There will probably still be some errors because in GL an observed pair is counted as 2 whereas in PP it is counted as 1 and there is no differentiation between observed pairs vs. aural id of a singing male
+allData <- rbind(trainingData, validationData)
+```
+
+
+#Check for Colinearity among variables
+```{r}
+######Individual spp
+sppA <- c("AMBI", "VIRA", "SORA", "PBGR")
+dataset <- c("GLCWMP","PPDWMP", "GLMMP")
+
+corTable<- data.frame(dataset = rep(dataset, each = length(sppA)),
+        spp = rep(sppA, times = length(dataset)),
+        nldG = rep(0, length(sppA)* length(dataset)),
+        nldC = rep(0, length(sppA)* length(dataset)),
+        nldF= rep(0, length(sppA)* length(dataset)),
+        ldG= rep(0, length(sppA)* length(dataset)),
+        ldC= rep(0, length(sppA)* length(dataset)),
+        ldT= rep(0, length(sppA)* length(dataset)),
+        ldF= rep(0, length(sppA)* length(dataset)),
+        ldNld= rep(0, length(sppA)* length(dataset)),
+        ldA= rep(0, length(sppA)* length(dataset)),
+        ldOW= rep(0, length(sppA)* length(dataset)),
+        ldSM= rep(0, length(sppA)* length(dataset)),
+        ldEV= rep(0, length(sppA)* length(dataset)),
+        ldWM= rep(0, length(sppA)* length(dataset)),
+        nldA= rep(0, length(sppA)* length(dataset)),
+        gA= rep(0, length(sppA)* length(dataset)),
+        cA= rep(0, length(sppA)* length(dataset)),
+        tA= rep(0, length(sppA)* length(dataset)),
+        fA= rep(0, length(sppA)* length(dataset)),
+        aOW= rep(0, length(sppA)* length(dataset)),
+        aSM= rep(0, length(sppA)* length(dataset)),
+        aEV= rep(0, length(sppA)* length(dataset)),
+        aWM= rep(0, length(sppA)* length(dataset)),
+        sT= rep(0, length(sppA)* length(dataset)),
+        sG= rep(0, length(sppA)* length(dataset)),
+        sC= rep(0, length(sppA)* length(dataset)),
+        sF= rep(0, length(sppA)* length(dataset)),
+        max = rep(0, length(sppA)* length(dataset)))
+
+for(r in 1:nrow(corTable)){  
+    print(paste("Working on dataset", corTable[r,"dataset"]))
+    data <- subset(allData, data == corTable[r,"dataset"])
+    print(paste("Working on species", corTable[r, "spp"])) #This just let's us know that it is working on a particular species
+    SPP <- data[as.character(data$species) == as.character(corTable[r, "spp"]),] #equiv to data[data$species == sppA[s], ]
+      #Habitat Model 
+  #myData$naturalLandDiversity[is.na(PPdat$naturalLandDiversity)] <- mean(PPdat$naturalLandDiversity, na.rm = TRUE)
+      corTable$nldG[r] <- cor.test(SPP$naturalLandDiversity, SPP$Grass400)[[4]]
+      corTable$nldC[r] <-cor.test(SPP$naturalLandDiversity, SPP$Crop400)[[4]]
+      corTable$nldT[r] <-cor.test(SPP$naturalLandDiversity, SPP$Totwet400)[[4]]
+      corTable$nldF[r] <-cor.test(SPP$naturalLandDiversity, SPP$Forest400)[[4]]
+      corTable$ldG[r] <-cor.test(SPP$localDiversity, SPP$Grass400)[[4]]
+      corTable$ldC[r] <-cor.test(SPP$localDiversity, SPP$Crop400)[[4]]
+      corTable$ldT[r] <-cor.test(SPP$localDiversity, SPP$Totwet400)[[4]]
+      corTable$ldF[r] <-cor.test(SPP$localDiversity, SPP$Forest400)[[4]]
+      corTable$ldNld[r] <-cor.test(SPP$localDiversity, SPP$naturalLandDiversity)[[4]]
+      corTable$ldA[r] <-cor.test(SPP$localDiversity, SPP$count)[[4]]
+      corTable$ldOW[r] <-cor.test(SPP$OW, SPP$localDiversity)[[4]]
+      corTable$ldSM[r] <-cor.test(SPP$SM, SPP$localDiversity)[[4]]
+      corTable$ldEV[r] <-cor.test(SPP$EV, SPP$localDiversity)[[4]]
+      corTable$ldWM[r] <-cor.test(SPP$WM, SPP$localDiversity)[[4]]
+      corTable$nldA[r] <-cor.test(SPP$naturalLandDiversity, SPP$count)[[4]]
+      corTable$gA[r] <- cor.test(SPP$Grass400, SPP$count)[[4]]
+      corTable$cA[r] <-cor.test(SPP$Crop400, SPP$count)[[4]]
+      corTable$tA[r] <-cor.test(SPP$Totwet400, SPP$count)[[4]]
+      corTable$fA[r] <-cor.test(SPP$Forest400, SPP$count)[[4]]
+      corTable$aOW[r] <-cor.test(SPP$OW, SPP$count)[[4]]
+      corTable$aSM[r] <-cor.test(SPP$SM, SPP$count)[[4]]
+      corTable$aEV[r] <-cor.test(SPP$EV, SPP$count)[[4]]
+      corTable$aWM[r] <-cor.test(SPP$WM, SPP$count)[[4]]
+      #corTable$sT[r] <-cor.test(SPP$area, SPP$Totwet400)[[4]] #total wetland w/in 400m is the same as area for GLCWMP and MMP
+      corTable$sG[r] <-cor.test(SPP$area, SPP$Grass400)[[4]]
+      corTable$sC[r] <-cor.test(SPP$area, SPP$Crop400)[[4]]
+      corTable$sF[r] <-cor.test(SPP$area, SPP$Forest400)[[4]]
+      corTable$max[r] <- max(abs(corTable[r,3:28]))
+}
+
+sA <-cor.test(PPdat$size, PPdat$area)[[4]]
+##We assessed for the problematic effects of collinearity, using a threshold-based pre-selection to exclude highly correlated variables (Dormann et al. 2013).  For pairs of variables with correlations |r| ??? 0.60, I will retain only the variable that had a stronger correlation with species count for each species of interest.
+subset(corTable, corTable$max >= .60)
+#no correlation values >= abs(0.60), so good to go with all variables
+```
+
+#Create list of variables
+```{r}
+varLists <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/densityPlotResults3.csv")
+#replace categorical wetland size with wetland area
+sizes <- varLists[varLists$Variable == "size",]
+sizes$In <- c("1")
+#varLists <- rbind(varLists[!varLists$Variable == "size",], sizes)
+
+areas <- sizes
+areas$Variable <- c("area")
+varLists <- rbind(varLists, areas)
+varLists <- varLists[!(varLists$Variable == "size"),]
+
+trainingData$alkali <- ifelse(trainingData$class == "ALKALI", 1, 0)
+validationData$alkali <- ifelse(validationData$class == "ALKALI", 1, 0)
+
+wetClass <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/wetland classifications.csv")
+trainingData <- merge(trainingData, wetClass[,1:2], by = "class")
+validationData <- merge(validationData, wetClass[,1:2], by = "class")
+
+classes <- varLists[varLists$Variable == "class",]
+classes$Variable <- c("hydroperiod")
+varLists <- rbind(varLists[!varLists$Variable == "class",], classes)
+
+varLists <- varLists[!(varLists$Variable == "Totwet400"),]
+```
+
+#Save Datasets
+```{r}
+write.csv(trainingData, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/trainingData.csv", quote=T, row.names=F)
+
+write.csv(validationData, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/validationData.csv", quote=T, row.names=F)
+
+write.csv(varLists, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/varLists.csv", quote=T, row.names=F)
+```
+
+```{r}
+ambiPP <- subset(trainingData, trainingData$species == "AMBI" & trainingData$count == 1 & trainingData$data == "GLCWMP")
+hist(ambiPP[,11])
+ambiPP[,11]
+```
+
+```{r}
+pbgrPP <- subset(trainingData, trainingData$species == "PBGR" & trainingData$count == 1 & trainingData$data == "PPDWMP")
+plot(pbgrPP[,5:18])
+```
+```{r}
+library(sessioninfo)
+sessionInfo()
+```
+

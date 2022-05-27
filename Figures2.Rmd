@@ -1,0 +1,811 @@
+---
+title: "areaplots2"
+author: "Lisa"
+date: "3/10/2022"
+output: html_document
+---
+
+#Load data
+```{r}
+trainingData <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/trainingData.csv")
+
+final.data.GLCWMPPBGR <- read.csv( "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLCWMPPBGR.csv")
+final.data.GLMMPPBGR <- read.csv( "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLMMPPBGR.csv")
+
+final.data.PPDWMPPBGR <- read.csv( "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.PPDWMPPBGR.csv")
+
+final.data.GLCWMPVIRA <- read.csv( "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLCWMPVIRA.csv")
+
+final.data.GLMMPVIRA <- read.csv( "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLMMPVIRA.csv")
+
+final.data.PPDWMPVIRA <- read.csv( "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.PPDWMPVIRA.csv")
+
+final.data.GLCWMPSORA <- read.csv( "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLCWMPSORA.csv")
+
+final.data.GLMMPSORA <- read.csv( "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLMMPSORA.csv")
+
+final.data.PPDWMPSORA <- read.csv( "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.PPDWMPSORA.csv")
+
+final.data.GLCWMPAMBI <- read.csv( "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLCWMPAMBI.csv")
+
+final.data.GLMMPAMBI <- read.csv( "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLMMPAMBI.csv")
+
+final.data.PPDWMPAMBI <- read.csv( "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.PPDWMPAMBI.csv")
+```
+
+#Create area plot
+```{r}
+#library(broom)
+library(MASS)
+notcols <- c("size", "count")
+#####
+#PBGR
+#####
+####
+#GLCWMP
+#####
+#create normalized data frame
+dat <- subset(trainingData, species == "PBGR" & data == "GLCWMP")
+dat2 <- dat[,colnames(dat) %in% colnames(final.data.GLCWMPPBGR)]
+dat3 <- dat2[,!(colnames(dat2) %in% notcols) ]
+normData <- scale(dat3)
+
+#replicate best model
+Dcw = final.data.GLCWMPPBGR
+Dcw$area <- as.numeric(Dcw$area)
+lmCW <- glm(count ~ area + Crop400 + Forest400 + EV + 1,
+            data =  Dcw, family = poisson, na.action = na.pass)
+
+#create area values over which to predict count
+N=1e4
+xmin = min(normData[,"area"]); xmax=max(normData[,"area"])
+xv=seq(xmin,xmax, length.out=N)
+
+#predict count values for values of area
+unsc.Ps <-(lmCW$coefficients[["(Intercept)"]] ) +
+  (lmCW$coefficients[["area"]]*xv*attr(normData, which = 'scaled:scale')[["area"]] + attr(normData, which = 'scaled:center')[["area"]]) #+ 
+
+#create unscaled dataframe
+dCW <- data.frame(xvals = (xv* attr(normData, which = 'scaled:scale')[["area"]]) 
+                  + attr(normData, which = 'scaled:center')[["area"]],
+                  yvals = log(unsc.Ps), data = rep("CWMP"))
+
+
+plot(dCW$x, dCW$y)
+
+####
+#GLMMP
+#####
+#create normalized data frame
+dat <- subset(trainingData, species == "PBGR" & data == "GLMMP")
+dat2 <- dat[,colnames(dat) %in% colnames(final.data.GLMMPPBGR)]
+dat3 <- dat2[,!(colnames(dat2) %in% notcols) ]
+normData <- scale(dat3)
+
+#replicate best model
+Dmm = final.data.GLMMPPBGR
+Dmm$area <- as.numeric(Dmm$area)
+lmMM <- glm.nb(count ~ area + Forest400 + OW + WM + 1,
+               data =  Dmm, init.theta = 0.1608621864, 
+               link = log, na.action = na.pass)
+
+#create area values over which to predict count
+N=1e4
+xmin = min(normData[,"area"]); xmax=max(normData[,"area"])
+xv=seq(xmin,xmax, length.out=N)
+
+#predict count values for values of area
+unsc.Ps <-(lmMM$coefficients[["(Intercept)"]] ) +
+          (lmMM$coefficients[["area"]]*xv*attr(normData, which = 'scaled:scale')[["area"]] + attr(normData, which = 'scaled:center')[["area"]]) #+ 
+
+#create unscaled dataframe
+dMM <- data.frame(xvals = (xv* attr(normData, which = 'scaled:scale')[["area"]]) 
+                  + attr(normData, which = 'scaled:center')[["area"]],
+                  yvals = log(unsc.Ps), data = rep("GLMMP"))
+
+
+plot(dMM$x, dMM$y)
+
+####
+#DWS
+#####
+#create normalized data frame
+dat <- subset(trainingData, species == "PBGR" & data == "PPDWMP")
+dat2 <- dat[,colnames(dat) %in% colnames(final.data.PPDWMPPBGR)]
+dat3 <- dat2[,!(colnames(dat2) %in% notcols) ]
+normData <- scale(dat3)
+
+#replicate best model
+Dpp = final.data.PPDWMPPBGR
+Dpp$area <- as.numeric(Dpp$area)
+for (i in 1:nrow(Dpp)){
+  Dpp$ld2[i] = final.data.PPDWMPPBGR$localDiversity[i] * final.data.PPDWMPPBGR$localDiversity [i]
+}
+lmPP <- glm(count ~ area + Crop400 + EV + hydroperiod + localDiversity + 
+              OW + WM + alkali + ld2 + 1 + offset(log(size + 1)),
+            data =  Dpp, family = poisson, na.action = na.pass)
+
+#create area values over which to predict count
+N=1e4
+xmin = min(normData[,"area"]); xmax=max(normData[,"area"])
+xv=seq(xmin,xmax, length.out=N)
+
+#predict count values for values of area
+unsc.Ps <-(lmPP$coefficients[["(Intercept)"]] ) +
+  (lmPP$coefficients[["area"]]*xv*attr(normData, which = 'scaled:scale')[["area"]] + 
+     attr(normData, which = 'scaled:center')[["area"]]) +
+    offset(mean(Dpp$size))
+
+#create unscaled dataframe
+dPP <- data.frame(xvals = (xv* attr(normData, which = 'scaled:scale')[["area"]]) 
+                  + attr(normData, which = 'scaled:center')[["area"]],
+                  yvals = log(unsc.Ps), data = rep("DWS"))
+
+
+plot(dPP$xvals, dPP$yvals)
+
+
+####
+#Plotting
+#####
+
+#develop background scatterplot of areas
+sppDat <- subset(trainingData, trainingData$species == "PBGR")
+sppDatcw <- subset(sppDat, data == "GLCWMP")
+sppDatmm <- subset(sppDat, data == "GLMMP")
+sppDatpp <- subset(sppDat, data == "PPDWMP")
+sppDatcw$data <- rep("CWMP", nrow(sppDatcw))
+sppDatmm$data <- rep("GLMMP", nrow(sppDatmm))
+sppDatpp$data <- rep("DWS", nrow(sppDatpp))
+
+sppDat <- rbind(sppDatcw, sppDatmm, sppDatpp)
+sppDat$data <- factor(sppDat$data, levels = c("CWMP", "GLMMP", "DWS"), ordered = TRUE)
+
+#plot
+legend_title <- "Region"
+PBGRplot <- ggplot(data=sppDat, aes(x=area, y=count, color = data, shape = data)) +
+  geom_point(position = "jitter") +   #scatterplot of points
+  #geom_point() +
+  xlim(0, 50) +
+  ylim(0, 5) +
+  #scale_color_manual(values=c("black", "gray90", "gray69")) +
+  scale_colour_manual(legend_title, values=c("#a6cee3", "#1f78b4", "#b2df8a")) +
+  scale_shape_manual(legend_title, values = c(1, 2, 5)) +
+  theme_classic() + #Removes the top and right borders
+  theme(panel.grid.minor=element_blank(), panel.grid.major=element_blank()) + #Remove the gridlines
+  theme(text=element_text(size=20)) + #Change all font sizes to 20
+  labs(title = "A) Pied-billed Grebe", x = "Wetland Area (ha)", y = "Abundance") + #Add x and y axis labels
+  theme(axis.text.x=element_text(size=20, hjust = 1), axis.text.y=element_text(size=20)) + #Make text on axis labels and axis title larger 
+  theme(axis.title.x = element_text(size=20,face="bold", vjust=-0.5)) + #Move the x axis title down so that it doesn't touch the axis text
+  theme(axis.title.y = element_text(size=20,face="bold", vjust=1.5)) +
+  theme(plot.title = element_text(face = "bold"),
+        #legend.position = c(.4, .95),
+        legend.justification = c(1, 1),
+        legend.background = element_rect(colour="grey80"),
+        legend.text = element_text(size = 20),
+        legend.title = element_text(size=20, face="bold"),
+        legend.title.align = .5) +
+  geom_line(data = dMM, aes(x=xvals, y = yvals),size=1) +
+  geom_line(data = dCW, aes(x=xvals, y = yvals),size=1) +
+  geom_line(data = dPP, aes(x=xvals, y = yvals),size=1)
+
+
+#######################################
+#####
+#VIRA
+#####
+####
+#GLCWMP
+#####
+#create normalized data frame
+dat <- subset(trainingData, species == "VIRA" & data == "GLCWMP")
+dat2 <- dat[,colnames(dat) %in% colnames(final.data.GLCWMPVIRA)]
+dat3 <- dat2[,!(colnames(dat2) %in% notcols) ]
+normData <- scale(dat3)
+
+#replicate best model
+Dcw = final.data.GLCWMPVIRA
+Dcw$area <- as.numeric(Dcw$area)
+lmCW <- glm(count ~ area + Grass400 + hydroperiod + OW + WM + 1,
+            data =  Dcw, family = poisson, na.action = na.pass)
+
+#create area values over which to predict count
+N=1e4
+xmin = min(normData[,"area"]); xmax=max(normData[,"area"])
+xv=seq(xmin,xmax, length.out=N)
+
+#predict count values for values of area
+unsc.Ps <-(lmCW$coefficients[["(Intercept)"]] ) +
+  (lmCW$coefficients[["area"]]*xv*attr(normData, which = 'scaled:scale')[["area"]] + attr(normData, which = 'scaled:center')[["area"]]) #+ 
+
+#create unscaled dataframe
+dCW <- data.frame(xvals = (xv* attr(normData, which = 'scaled:scale')[["area"]]) 
+                  + attr(normData, which = 'scaled:center')[["area"]],
+                  yvals = log(unsc.Ps), data = rep("CWMP"))
+
+
+plot(dCW$x, dCW$y)
+
+####
+#GLMMP
+#####
+#create normalized data frame
+dat <- subset(trainingData, species == "VIRA" & data == "GLMMP")
+dat2 <- dat[,colnames(dat) %in% colnames(final.data.GLMMPVIRA)]
+dat3 <- dat2[,!(colnames(dat2) %in% notcols) ]
+normData <- scale(dat3)
+
+#replicate best model
+Dmm = final.data.GLMMPVIRA
+Dmm$area <- as.numeric(Dmm$area)
+lmMM <- glm.nb(count ~ area + EV + OW + WM + 1,
+               data =  Dmm, init.theta = 0.1608621864, 
+               link = log, na.action = na.pass)
+
+#create area values over which to predict count
+N=1e4
+xmin = min(normData[,"area"]); xmax=max(normData[,"area"])
+xv=seq(xmin,xmax, length.out=N)
+
+#predict count values for values of area
+unsc.Ps <-(lmMM$coefficients[["(Intercept)"]] ) +
+  (lmMM$coefficients[["area"]]*xv*attr(normData, which = 'scaled:scale')[["area"]] + attr(normData, which = 'scaled:center')[["area"]]) #+ 
+
+#create unscaled dataframe
+dMM <- data.frame(xvals = (xv* attr(normData, which = 'scaled:scale')[["area"]]) 
+                  + attr(normData, which = 'scaled:center')[["area"]],
+                  yvals = log(unsc.Ps), data = rep("GLMMP"))
+
+
+plot(dMM$x, dMM$y)
+
+####
+#DWS
+#####
+#create normalized data frame
+dat <- subset(trainingData, species == "VIRA" & data == "PPDWMP")
+dat2 <- dat[,colnames(dat) %in% colnames(final.data.PPDWMPVIRA)]
+dat3 <- dat2[,!(colnames(dat2) %in% notcols) ]
+normData <- scale(dat3)
+
+#replicate best model
+Dpp = final.data.PPDWMPPBGR
+Dpp$area <- as.numeric(Dpp$area)
+lmPP <- glm.nb(count ~ area + Crop400 + EV + hydroperiod + localDiversity + 
+                 OW + WM + alkali + 1 + offset(log(size + 1)),
+               data =  Dpp, init.theta = 0.411454464, 
+               link = log, na.action = na.pass)
+
+#create area values over which to predict count
+N=1e4
+xmin = min(normData[,"area"]); xmax=max(normData[,"area"])
+xv=seq(xmin,xmax, length.out=N)
+
+#predict count values for values of area
+unsc.Ps <-(lmPP$coefficients[["(Intercept)"]] ) +
+  (lmPP$coefficients[["area"]]*xv*attr(normData, which = 'scaled:scale')[["area"]] + 
+     attr(normData, which = 'scaled:center')[["area"]]) +
+  offset(mean(Dpp$size))
+
+#create unscaled dataframe
+dPP <- data.frame(xvals = (xv* attr(normData, which = 'scaled:scale')[["area"]]) 
+                  + attr(normData, which = 'scaled:center')[["area"]],
+                  yvals = log(unsc.Ps), data = rep("DWS"))
+
+
+plot(dPP$xvals, dPP$yvals)
+
+
+####
+#Plotting
+#####
+
+#develop background scatterplot of areas
+sppDat <- subset(trainingData, trainingData$species == "VIRA")
+sppDatcw <- subset(sppDat, data == "GLCWMP")
+sppDatmm <- subset(sppDat, data == "GLMMP")
+sppDatpp <- subset(sppDat, data == "PPDWMP")
+sppDatcw$data <- rep("CWMP", nrow(sppDatcw))
+sppDatmm$data <- rep("GLMMP", nrow(sppDatmm))
+sppDatpp$data <- rep("DWS", nrow(sppDatpp))
+
+sppDat <- rbind(sppDatcw, sppDatmm, sppDatpp)
+sppDat$data <- factor(sppDat$data, levels = c("CWMP", "GLMMP", "DWS"), ordered = TRUE)
+
+#plot
+legend_title <- "Region"
+VIRAplot <- ggplot(data=sppDat, aes(x=area, y=count, color = data, shape = data)) +
+  geom_point(position = "jitter") +   #scatterplot of points
+  #geom_point() +
+  xlim(0, 50) +
+  ylim(0, 5) +
+  #scale_color_manual(values=c("black", "gray90", "gray69")) +
+  scale_colour_manual(legend_title, values=c("#a6cee3", "#1f78b4", "#b2df8a")) +
+  scale_shape_manual(legend_title, values = c(1, 2, 5)) +
+  theme_classic() + #Removes the top and right borders
+  theme(panel.grid.minor=element_blank(), panel.grid.major=element_blank()) + #Remove the gridlines
+  labs(title = "B) Virginia Rail", x = "Wetland Area (ha)", y = "Abundance") + #Add x and y axis labels
+   theme(text=element_text(size=20)) + #Change all font sizes to 20
+  theme(axis.text.x=element_text(size=20, hjust = 1), axis.text.y=element_text(size=20)) + #Make text on axis labels and axis title larger 
+  theme(axis.title.x = element_text(size=20,face="bold", vjust=-0.5)) + #Move the x axis title down so that it doesn't touch the axis text
+  theme(axis.title.y = element_text(size=20,face="bold", vjust=1.5)) +
+  theme(plot.title = element_text(face = "bold"),
+        #legend.position = c(.4, .95),
+        legend.justification = c(1, 1),
+        legend.background = element_rect(colour="grey80"),
+        legend.text = element_text(size = 20),
+        legend.title = element_text(size=20, face="bold"),
+        legend.title.align = .5) +
+  geom_line(data = dMM, aes(x=xvals, y = yvals),size=1) +
+  geom_line(data = dCW, aes(x=xvals, y = yvals),size=1) +
+  geom_line(data = dPP, aes(x=xvals, y = yvals),size=1)
+
+
+###############################################
+#####
+#SORA
+#####
+####
+#GLCWMP
+#####
+#create normalized data frame
+dat <- subset(trainingData, species == "SORA" & data == "GLCWMP")
+dat2 <- dat[,colnames(dat) %in% colnames(final.data.GLCWMPSORA)]
+dat3 <- dat2[,!(colnames(dat2) %in% notcols) ]
+normData <- scale(dat3)
+
+#replicate best model
+Dcw = final.data.GLCWMPSORA
+Dcw$area <- as.numeric(Dcw$area)
+lmCW <- glm(count ~ area + Crop400 + Forest400 + 1 + offset(log(size + 1)),
+            data =  Dcw, family = poisson, na.action = na.pass)
+#create area values over which to predict count
+N=1e4
+xmin = min(normData[,"area"]); xmax=max(normData[,"area"])
+xv=seq(xmin,xmax, length.out=N)
+
+#predict count values for values of area
+unsc.Ps <-(lmCW$coefficients[["(Intercept)"]] ) +
+  (lmCW$coefficients[["area"]]*xv*attr(normData, which = 'scaled:scale')[["area"]] + attr(normData, which = 'scaled:center')[["area"]]) #+ 
+
+#create unscaled dataframe
+dCW <- data.frame(xvals = (xv* attr(normData, which = 'scaled:scale')[["area"]]) 
+                  + attr(normData, which = 'scaled:center')[["area"]],
+                  yvals = log(unsc.Ps), data = rep("CWMP"))
+
+
+plot(dCW$x, dCW$y)
+
+####
+#GLMMP
+#####
+#create normalized data frame
+dat <- subset(trainingData, species == "SORA" & data == "GLMMP")
+dat2 <- dat[,colnames(dat) %in% colnames(final.data.GLMMPSORA)]
+dat3 <- dat2[,!(colnames(dat2) %in% notcols) ]
+normData <- scale(dat3)
+
+#replicate best model
+Dmm = final.data.GLMMPSORA
+Dmm$area <- as.numeric(Dmm$area)
+lmMM <- glm.nb(count ~ area + OW + 1 + offset(log(size + 1)),
+               data =  Dmm, init.theta = 0.1657792069, 
+               link = log, na.action = na.pass)
+
+#create area values over which to predict count
+N=1e4
+xmin = min(normData[,"area"]); xmax=max(normData[,"area"])
+xv=seq(xmin,xmax, length.out=N)
+
+#predict count values for values of area
+unsc.Ps <-(lmMM$coefficients[["(Intercept)"]] ) +
+  (lmMM$coefficients[["area"]]*xv*attr(normData, which = 'scaled:scale')[["area"]] + attr(normData, which = 'scaled:center')[["area"]]) #+ 
+
+#create unscaled dataframe
+dMM <- data.frame(xvals = (xv* attr(normData, which = 'scaled:scale')[["area"]]) 
+                  + attr(normData, which = 'scaled:center')[["area"]],
+                  yvals = log(unsc.Ps), data = rep("GLMMP"))
+
+
+plot(dMM$x, dMM$y)
+
+####
+#DWS
+#####
+#create normalized data frame
+dat <- subset(trainingData, species == "SORA" & data == "PPDWMP")
+dat2 <- dat[,colnames(dat) %in% colnames(final.data.PPDWMPSORA)]
+dat3 <- dat2[,!(colnames(dat2) %in% notcols) ]
+normData <- scale(dat3)
+
+#replicate best model
+Dpp = final.data.PPDWMPSORA
+Dpp$area <- as.numeric(Dpp$area)
+lmPP <- glm.nb(count ~ area + EV + hydroperiod + localDiversity + 
+                 OW + alkali + 1 + offset(log(size + 1)),
+               data =  Dpp, init.theta = 0.8999723282, 
+               link = log, na.action = na.pass)
+
+#create area values over which to predict count
+N=1e4
+xmin = min(normData[,"area"]); xmax=max(normData[,"area"])
+xv=seq(xmin,xmax, length.out=N)
+
+#predict count values for values of area
+unsc.Ps <-(lmPP$coefficients[["(Intercept)"]] ) +
+  (lmPP$coefficients[["area"]]*xv*attr(normData, which = 'scaled:scale')[["area"]] + 
+     attr(normData, which = 'scaled:center')[["area"]]) +
+  offset(mean(Dpp$size))
+
+#create unscaled dataframe
+dPP <- data.frame(xvals = (xv* attr(normData, which = 'scaled:scale')[["area"]]) 
+                  + attr(normData, which = 'scaled:center')[["area"]],
+                  yvals = log(unsc.Ps), data = rep("DWS"))
+
+
+plot(dPP$xvals, dPP$yvals)
+
+
+####
+#Plotting
+#####
+
+#develop background scatterplot of areas
+sppDat <- subset(trainingData, trainingData$species == "SORA")
+sppDatcw <- subset(sppDat, data == "GLCWMP")
+sppDatmm <- subset(sppDat, data == "GLMMP")
+sppDatpp <- subset(sppDat, data == "PPDWMP")
+sppDatcw$data <- rep("CWMP", nrow(sppDatcw))
+sppDatmm$data <- rep("GLMMP", nrow(sppDatmm))
+sppDatpp$data <- rep("DWS", nrow(sppDatpp))
+
+sppDat <- rbind(sppDatcw, sppDatmm, sppDatpp)
+sppDat$data <- factor(sppDat$data, levels = c("CWMP", "GLMMP", "DWS"), ordered = TRUE)
+
+#plot
+legend_title <- "Region"
+SORAplot <- ggplot(data=sppDat, aes(x=area, y=count, color = data, shape = data)) +
+  geom_point(position = "jitter") +   #scatterplot of points
+  #geom_point() +
+  xlim(0, 50) +
+  ylim(0, 5) +
+  #scale_color_manual(values=c("black", "gray90", "gray69")) +
+  scale_colour_manual(legend_title, values=c("#a6cee3", "#1f78b4", "#b2df8a")) +
+  scale_shape_manual(legend_title, values = c(1, 2, 5)) +
+  theme_classic() + #Removes the top and right borders
+  theme(panel.grid.minor=element_blank(), panel.grid.major=element_blank()) + #Remove the gridlines
+  labs(title = "C) Sora", x = "Wetland Area (ha)", y = "Abundance") + #Add x and y axis labels
+   theme(text=element_text(size=20)) + #Change all font sizes to 20
+  theme(axis.text.x=element_text(size=20, hjust = 1), axis.text.y=element_text(size=20)) + #Make text on axis labels and axis title larger 
+  theme(axis.title.x = element_text(size=20,face="bold", vjust=-0.5)) + #Move the x axis title down so that it doesn't touch the axis text
+  theme(axis.title.y = element_text(size=20,face="bold", vjust=1.5)) +
+  theme(plot.title = element_text(face = "bold"),
+        #legend.position = c(.4, .95),
+        legend.justification = c(1, 1),
+        legend.background = element_rect(colour="grey80"),
+        legend.text = element_text(size = 20),
+        legend.title = element_text(size=20, face="bold"),
+        legend.title.align = .5) +
+  geom_line(data = dMM, aes(x=xvals, y = yvals),size=1) +
+  geom_line(data = dCW, aes(x=xvals, y = yvals),size=1) +
+  geom_line(data = dPP, aes(x=xvals, y = yvals),size=1)
+
+#####
+#AMBI
+#####
+####
+#GLCWMP
+#####
+#create normalized data frame
+dat <- subset(trainingData, species == "AMBI" & data == "GLCWMP")
+dat2 <- dat[,colnames(dat) %in% colnames(final.data.GLCWMPAMBI)]
+dat3 <- dat2[,!(colnames(dat2) %in% notcols) ]
+normData <- scale(dat3)
+
+#replicate best model
+Dcw = final.data.GLCWMPAMBI
+Dcw$area <- as.numeric(Dcw$area)
+for (i in 1:nrow(Dcw)){
+  Dcw$ld2[i] = final.data.GLCWMPAMBI$localDiversity[i] * final.data.GLCWMPAMBI$localDiversity [i]
+}
+lmCW <- glm(count ~ area + Forest400 + Grass400 + hydroperiod + 
+              localDiversity + OW + WM + ld2 + 1,
+            data =  Dcw, family = poisson, na.action = na.pass)
+
+#create area values over which to predict count
+N=1e4
+xmin = min(normData[,"area"]); xmax=max(normData[,"area"])
+xv=seq(xmin,xmax, length.out=N)
+
+#predict count values for values of area
+unsc.Ps <-(lmCW$coefficients[["(Intercept)"]] ) +
+  (lmCW$coefficients[["area"]]*xv*attr(normData, which = 'scaled:scale')[["area"]] + attr(normData, which = 'scaled:center')[["area"]]) #+ 
+
+#create unscaled dataframe
+dCW <- data.frame(xvals = (xv* attr(normData, which = 'scaled:scale')[["area"]]) 
+                  + attr(normData, which = 'scaled:center')[["area"]],
+                  yvals = log(unsc.Ps), data = rep("CWMP"))
+
+
+plot(dCW$x, dCW$y)
+
+####
+#GLMMP
+#####
+#create normalized data frame
+dat <- subset(trainingData, species == "AMBI" & data == "GLMMP")
+dat2 <- dat[,colnames(dat) %in% colnames(final.data.GLMMPAMBI)]
+dat3 <- dat2[,!(colnames(dat2) %in% notcols) ]
+normData <- scale(dat3)
+
+#replicate best model
+Dmm = final.data.GLMMPAMBI
+Dmm$area <- as.numeric(Dmm$area)
+lmMM <- glm(count ~ area + Grass400 + hydroperiod + WM + 1,
+            data =  Dmm, family = poisson, na.action = na.pass)
+
+#create area values over which to predict count
+N=1e4
+xmin = min(normData[,"area"]); xmax=max(normData[,"area"])
+xv=seq(xmin,xmax, length.out=N)
+
+#predict count values for values of area
+unsc.Ps <-(lmMM$coefficients[["(Intercept)"]] ) +
+  (lmMM$coefficients[["area"]]*xv*attr(normData, which = 'scaled:scale')[["area"]] + attr(normData, which = 'scaled:center')[["area"]]) #+ 
+
+#create unscaled dataframe
+dMM <- data.frame(xvals = (xv* attr(normData, which = 'scaled:scale')[["area"]]) 
+                  + attr(normData, which = 'scaled:center')[["area"]],
+                  yvals = log(unsc.Ps), data = rep("GLMMP"))
+
+
+plot(dMM$x, dMM$y)
+
+####
+#DWS
+#####
+#create normalized data frame
+dat <- subset(trainingData, species == "AMBI" & data == "PPDWMP")
+dat2 <- dat[,colnames(dat) %in% colnames(final.data.PPDWMPAMBI)]
+dat3 <- dat2[,!(colnames(dat2) %in% notcols) ]
+normData <- scale(dat3)
+
+#replicate best model
+Dpp = final.data.PPDWMPAMBI
+Dpp$area <- as.numeric(Dpp$area)
+lmPP <- glm(count ~ area + Crop400 + EV + hydroperiod + localDiversity + 
+              OW + WM + alkali + 1 + offset(log(size + 1)),
+            data =  Dpp, family = poisson, na.action = na.pass)
+
+#create area values over which to predict count
+N=1e4
+xmin = min(normData[,"area"]); xmax=max(normData[,"area"])
+xv=seq(xmin,xmax, length.out=N)
+
+#predict count values for values of area
+unsc.Ps <-(lmPP$coefficients[["(Intercept)"]] ) +
+  (lmPP$coefficients[["area"]]*xv*attr(normData, which = 'scaled:scale')[["area"]] + 
+     attr(normData, which = 'scaled:center')[["area"]]) +
+  offset(mean(Dpp$size))
+
+#create unscaled dataframe
+dPP <- data.frame(xvals = (xv* attr(normData, which = 'scaled:scale')[["area"]]) 
+                  + attr(normData, which = 'scaled:center')[["area"]],
+                  yvals = log(unsc.Ps), data = rep("DWS"))
+
+
+plot(dPP$xvals, dPP$yvals)
+
+
+####
+#Plotting
+#####
+
+#develop background scatterplot of areas
+sppDat <- subset(trainingData, trainingData$species == "AMBI")
+sppDatcw <- subset(sppDat, data == "GLCWMP")
+sppDatmm <- subset(sppDat, data == "GLMMP")
+sppDatpp <- subset(sppDat, data == "PPDWMP")
+sppDatcw$data <- rep("CWMP", nrow(sppDatcw))
+sppDatmm$data <- rep("GLMMP", nrow(sppDatmm))
+sppDatpp$data <- rep("DWS", nrow(sppDatpp))
+
+sppDat <- rbind(sppDatcw, sppDatmm, sppDatpp)
+sppDat$data <- factor(sppDat$data, levels = c("CWMP", "GLMMP", "DWS"), ordered = TRUE)
+
+#plot
+legend_title <- "Region"
+AMBIplot <- ggplot(data=sppDat, aes(x=area, y=count, color = data, shape = data)) +
+  geom_point(position = "jitter") +   #scatterplot of points
+  #geom_point() +
+  xlim(0, 50) +
+  ylim(0, 5) +
+  #scale_color_manual(values=c("black", "gray90", "gray69")) +
+  scale_colour_manual(legend_title, values=c("#a6cee3", "#1f78b4", "#b2df8a")) +
+  scale_shape_manual(legend_title, values = c(1, 2, 5)) +
+  theme_classic() + #Removes the top and right borders
+  theme(panel.grid.minor=element_blank(), panel.grid.major=element_blank()) + #Remove the gridlines
+  labs(title = "D) American Bittern", x = "Wetland Area (ha)", y = "Abundance") + #Add x and y axis labels
+  theme(text=element_text(size=20)) + #Change all font sizes to 20
+  theme(axis.text.x=element_text(size=20, hjust = 1), axis.text.y=element_text(size=20)) + #Make text on axis labels and axis title larger 
+  theme(axis.title.x = element_text(size=20,face="bold", vjust=-0.5)) + #Move the x axis title down so that it doesn't touch the axis text
+  theme(axis.title.y = element_text(size=20,face="bold", vjust=1.5)) +
+  theme(plot.title = element_text(face = "bold"),
+        #legend.position = c(.4, .95),
+        legend.justification = c(1, 1),
+        legend.background = element_rect(colour="grey80"),
+        legend.text = element_text(size = 20),
+        legend.title = element_text(size=20, face="bold"),
+        legend.title.align = .5) +
+  geom_line(data = dMM, aes(x=xvals, y = yvals),size=1) +
+  geom_line(data = dCW, aes(x=xvals, y = yvals),size=1) +
+  geom_line(data = dPP, aes(x=xvals, y = yvals),size=1)
+
+############Combine:  
+setwd("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Figures")
+library(Cairo)
+library(gridExtra)
+Cairo(file="AreaPlot3.png", type="png", units="in", width=10, height=7, pointsize=12, dpi=600)
+AreaPlot2 <- grid.arrange(PBGRplot, VIRAplot, SORAplot, AMBIplot, nrow = 2, ncol=2)
+print(AreaPlot2)
+dev.off()  
+```
+
+#Create Coefficient Plots
+```{r}
+
+library(Cairo)
+library(dplyr)
+library(dotwhisker)
+
+xPBGR <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/xPBGR.csv")
+#xPBGR <- xPBGR[!c(xPBGR$term == "offSize"),]
+xPBGR$model <- factor (xPBGR$model, 
+                       levels = c("CWMP","GLMMP","DWS"))
+setwd("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Figures")
+Cairo(file="PBGRplot.png", type="png", units="in", width=10, height=7, pointsize=20, dpi=600)
+PBGRplot<-dwplot(arrange(xPBGR, desc(model)), dodge_size = 0.6, dot_args = list(aes(shape = model), size = 3),
+            vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2)) %>%
+  relabel_predictors(c(alkali = "Alkali", area = "Area", hydroperiod = "Hydroperiod", 
+                       EV = "Emergent vegetation", OW = "Open water", SM = "Shoreline/Mudflat", 
+                       WM = "Wet meadow",
+                       Crop400 = "Cropland", Forest400 = "Forest", Grass400 = "Grassland",
+                       localDiversity = "Local heterogeneity",  naturalLandDiversity = "Landscape heterogeneity",
+                       LD2 = "Local heterogeneity^2", offSize = "Survey area offset")) +
+  theme_classic() + xlab("Coefficient Estimate") + ylab("") +
+  ggtitle("A) Pied-billed Grebe") +
+  theme(plot.title = element_text(face = "bold", size = 20),
+        legend.position = c(.95, .45),
+        legend.justification = c(1, 1),
+        legend.background = element_rect(colour="grey80"),
+        legend.text = element_text(size = 20),
+        legend.title = element_text(size=20, face="bold"),
+        legend.title.align = .5,
+        axis.title.x = element_text(size=20,face="bold", vjust=-0.5),
+        axis.text=element_text(size=20)) +
+  scale_shape_manual(name = "Region", values=c(16, 17, 18), 
+                     breaks = c("CWMP", "GLMMP", "DWS"), 
+                     labels = c("CWMP", "GLMMP", "DWS")) +
+  scale_colour_manual(values=c("#a6cee3", "#1f78b4", "#b2df8a"),
+                    name = "Region", labels = c("CWMP", "GLMMP", "DWS"),
+                 breaks = c("CWMP", "GLMMP", "DWS")) +
+  guides(shape = guide_legend("Region"), colour = guide_legend("Region")) # Combine the legends for shape and color
+print(PBGRplot)
+dev.off()
+
+#xVIRA <- list(VIRAGLCWMP, VIRAGLMMP, VIRAPPDWMP)
+
+xVIRA <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/xVIRA.csv")
+#xVIRA <- xVIRA[!c(xVIRA$term == "offSize"),]
+xVIRA$model <- factor (xVIRA$model, 
+                       levels = c("CWMP","GLMMP","DWS"))
+
+setwd("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Figures")
+Cairo(file="VIRAplot.png", type="png", units="in", width=10, height=7, pointsize=20, dpi=600)
+VIRAplot<-dwplot(arrange(xVIRA, desc(model)), dodge_size = 0.6, dot_args = list(aes(shape = model), size = 3), 
+            vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2)) %>%
+  relabel_predictors(c(alkali = "Alkali", area = "Area", hydroperiod = "Hydroperiod", 
+                       EV = "Emergent vegetation", OW = "Open water", SM = "Shoreline/Mudflat", 
+                       WM = "Wet meadow", 
+                       Crop400 = "Cropland", Forest400 = "Forest", Grass400 = "Grassland",
+                       localDiversity = "Local heterogeneity", naturalLandDiversity = "Landscape heterogeneity",
+                       LD2 = "Local heterogeneity^2", NLD2 = "Landscape heterogeneity^2", offSize = "Survey area offset")) +
+  theme_classic() + xlab("Coefficient Estimate") + ylab("") +
+  ggtitle("B) Virginia Rail") +
+  theme(plot.title = element_text(face = "bold", size = 20),
+        legend.position = c(.9, .4),
+        legend.justification = c(1, 1),
+        legend.background = element_rect(colour="grey80"),
+        legend.text = element_text(size = 20),
+        legend.title = element_text(size=20, face="bold"),
+        legend.title.align = .5,
+        axis.title.x = element_text(size=20,face="bold", vjust=-0.5),
+        axis.text=element_text(size=20)) +
+  scale_shape_manual(name = "Region", values=c(16, 17, 18), breaks = c("CWMP", "GLMMP", "DWS"), 
+                     labels = c("CWMP", "GLMMP", "DWS")) +
+  scale_colour_manual(values=c("#a6cee3", "#1f78b4", "#b2df8a"),
+                      name = "Region", labels = c("CWMP", "GLMMP", "DWS"),
+                      breaks = c("CWMP", "GLMMP", "DWS")) +
+   guides(shape = guide_legend("Region"), colour = guide_legend("Region")) # Combine the legends for shape and color
+
+
+print(VIRAplot)
+dev.off()
+
+#xSORA <- list(SORAGLCWMP, SORAGLMMP, SORAPPDWMP)
+
+xSORA <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/xSORA.csv")
+#xSORA <- xSORA[!c(xSORA$term == "offSize"),]
+xSORA$model <- factor (xSORA$model, 
+                       levels = c("CWMP","GLMMP","DWS"))
+
+#xSORA <- list(SORAGLCWMP, SORAGLMMP, SORAPPDWMP)
+setwd("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Figures")
+Cairo(file="SORAplot.png", type="png", units="in", width=10, height=7, pointsize=20, dpi=600)
+SORAplot<-dwplot(arrange(xSORA, desc(model)), dodge_size = 0.6, dot_args = list(aes(shape = model), size = 3),
+                 vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2)) %>%
+  relabel_predictors(c(alkali = "Alkali", area = "Area", hydroperiod = "Hydroperiod", 
+                       EV = "Emergent vegetation", OW = "Open water", SM = "Shoreline/Mudflat", 
+                       WM = "Wet meadow", 
+                       Crop400 = "Cropland", Forest400 = "Forest", Grass400 = "Grassland",
+                       localDiversity = "Local heterogeneity", naturalLandDiversity = "Landscape heterogeneity",
+                       LD2 = "Local heterogeneity^2", offSize = "Survey area offset")) +
+  theme_classic() + xlab("Coefficient Estimate") + ylab("") +
+  ggtitle("C) Sora") +
+  theme(plot.title = element_text(face = "bold", size = 20),
+        legend.position = c(.35, .95),
+        legend.justification = c(1, 1),
+        legend.background = element_rect(colour="grey80"),
+        legend.text = element_text(size = 20),
+        legend.title = element_text(size=20, face="bold"),
+        legend.title.align = .5,
+        axis.title.x = element_text(size=20,face="bold", vjust=-0.5),
+        axis.text=element_text(size=20)) +
+  scale_shape_manual(name = "Region", values=c(16, 17, 18), breaks = c("CWMP", "GLMMP", "DWS"),
+                     labels = c("CWMP", "GLMMP", "DWS")) +
+  scale_colour_manual(values=c("#a6cee3", "#1f78b4", "#b2df8a"),
+                      name = "Region", labels = c("CWMP", "GLMMP", "DWS"),
+                      breaks = c("CWMP", "GLMMP", "DWS")) +
+   guides(shape = guide_legend("Region"), colour = guide_legend("Region")) # Combine the legends for shape and color
+print(SORAplot)
+dev.off()
+
+
+
+xAMBI <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/xAMBI.csv")
+#xAMBI <- xAMBI[!c(xAMBI$term == "offSize"),]
+xAMBI$model <- factor (xAMBI$model, 
+                        levels = c("CWMP","GLMMP","DWS"))
+
+setwd("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Figures")
+Cairo(file="AMBIplot.png", type="png", units="in", width=10, height=7, pointsize=20, dpi=600)
+AMBIplot<-dwplot(arrange(xAMBI, desc(model)), dodge_size = 0.6, dot_args = list(aes(shape = model), size = 3),
+                 vline = geom_vline(xintercept = 0, colour = "grey60", linetype = 2)) %>%
+relabel_predictors(c(alkali = "Alkali", area = "Area", hydroperiod = "Hydroperiod", 
+                     EV = "Emergent vegetation", OW = "Open water", SM = "Shoreline/Mudflat", 
+                     WM = "Wet meadow", 
+                     Crop400 = "Cropland", Forest400 = "Forest", Grass400 = "Grassland",
+                     localDiversity = "Local heterogeneity", naturalLandDiversity = "Landscape heterogeneity",
+                     LD2 = "Local heterogeneity^2", NLD2 = "Landscape heterogeneity^2", offSize = "Survey area offset")) +
+  theme_classic() + xlab("Coefficient Estimate") + ylab("") +
+  ggtitle("D) American Bittern") +
+  theme(plot.title = element_text(face = "bold", size = 20),
+        legend.position = c(.4, .95),
+        legend.justification = c(1, 1),
+        legend.background = element_rect(colour="grey80"),
+        legend.text = element_text(size = 20),
+        legend.title = element_text(size=20, face="bold"),
+        legend.title.align = .5,
+        axis.title.x = element_text(size=20,face="bold", vjust=-0.5),
+        axis.text=element_text(size=20)) +
+  scale_shape_manual(name = "Region", values=c(16, 17, 18), breaks = c("CWMP", "GLMMP", "DWS"),
+                     labels = c("CWMP", "GLMMP", "DWS")) +
+  scale_colour_manual(values=c("#a6cee3", "#1f78b4", "#b2df8a"),
+                      name = "Region", labels = c("CWMP", "GLMMP", "DWS"),
+                      breaks = c("CWMP", "GLMMP", "DWS")) +
+   guides(shape = guide_legend("Region"), colour = guide_legend("Region")) # Combine the legends for shape and color
+
+print(AMBIplot)
+dev.off()
+```
+

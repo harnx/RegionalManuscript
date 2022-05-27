@@ -1,0 +1,486 @@
+---
+title: "RegionalAnalysis"
+author: "Lisa"
+date: "3/16/2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r}
+library(lme4) #Add package for lmer (mixed effects modeling)
+library(stats) #package contains extractAIC
+library(MuMIn) #package for R squared
+library(stringr)
+library(dplyr)
+library(MASS)
+library(pscl)
+library(msme)
+library(dotwhisker)
+library(broom)
+setwd("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs")
+```
+
+#Read in datasets
+```{r}
+trainingData <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/trainingData.csv")
+
+validationData <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/validationData.csv")
+
+varLists <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/varLists.csv")
+```
+
+#Create a sample size table
+```{r}
+tData <- trainingData
+tData$val <- rep("training")
+vData <- validationData
+vData$val <- rep("validation")
+tvData <- rbind(tData, vData)
+sampleSize <- aggregate(tvData[,c("count")], by = list(species = tvData$species, dataset = tvData$data, val = tvData$val), function(x) sum(x, na.rm=T))
+write.csv(sampleSize, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Tables/sampleSize.csv", quote=T, row.names=F)
+```
+
+#Add species list and dataset list
+```{r}
+sppA <- c("PBGR","VIRA", "SORA", "AMBI")
+dataset <- c("GLCWMP", "GLMMP", "PPDWMP")
+```
+
+#Create Table3 dataframe
+```{r}
+table3 <- data.frame(species = rep(sppA, each = length(dataset)),
+                     dataset = rep(dataset, times = length(sppA)),
+                     bestModel = rep(0, length(sppA)*length(dataset)),
+                     distribution = rep(0, length(sppA)*length(dataset)),
+                     pseudoR2 = rep(0, length(sppA)*length(dataset)),
+                     region1 = rep(0, length(sppA)*length(dataset)),
+                     region2 = rep(0, length(sppA)*length(dataset)),
+                     region3 = rep(0, length(sppA)*length(dataset)),
+                     pR2 = rep(0, length(sppA)*length(dataset)),
+                     k = rep(0, length(sppA)*length(dataset)))
+                     #NEED TO GET IN THE VALIDATION RESULTS)
+
+appendix1 <- data.frame(species = rep(sppA, each = length(dataset)),
+                        dataset = rep(dataset, times = length(sppA)),
+                        NullDev = rep(0, length(sppA)*length(dataset)),
+                        ndDf = rep(0, length(sppA)*length(dataset)),
+                        ResidualDev = rep(0, length(sppA)*length(dataset)),
+                        rdDf = rep(0, length(sppA)*length(dataset)),
+                        VuongR = rep(0, length(sppA)*length(dataset)),
+                        VuongAIC = rep(0, length(sppA)*length(dataset)),
+                        VuongBIC = rep(0, length(sppA)*length(dataset)),
+                        Pchi2 = rep(0, length(sppA)*length(dataset)),
+                        Pdisp = rep(0, length(sppA)*length(dataset)))
+appendix2 <- data.frame(species = rep(sppA, each = length(dataset)),
+                        dataset = rep(dataset, times = length(sppA)),
+                     Intercept = rep(0, length(sppA)*length(dataset)),
+                     alkali = rep(0, length(sppA)*length(dataset)), 
+                     area = rep(0, length(sppA)*length(dataset)),
+                     hydroperiod = rep(0, length(sppA)*length(dataset)),
+                     EV = rep(0, length(sppA)*length(dataset)),
+                     OW = rep(0, length(sppA)*length(dataset)),
+                     SM = rep(0, length(sppA)*length(dataset)),
+                     WM = rep(0, length(sppA)*length(dataset)),
+                     Crop = rep(0, length(sppA)*length(dataset)),
+                     Forest = rep(0, length(sppA)*length(dataset)),
+                     Grassland = rep(0, length(sppA)*length(dataset)),
+                     coverDiversity = rep(0, length(sppA)*length(dataset)),
+                     coverDiversity2 = rep(0, length(sppA)*length(dataset)),
+                     landDiversity = rep(0, length(sppA)*length(dataset)),
+                     landDiversity2 = rep(0, length(sppA)*length(dataset)))
+                    
+                        
+                        
+                        
+table3v <- table3
+appendix1v <- appendix1
+appendix2se <- appendix2
+```
+
+#Create function to get variables from the model
+```{r}
+getCoef <- function(mdl, varName) {
+  
+  summary(mdl)$coefficients[rownames(summary(mdl)$coefficients) == varName,]
+  
+  
+}
+```
+
+```{r}
+for(s in 1:length(sppA)){  
+  print(paste("Working on species", sppA[s])) #This just let's us know that it is working on a particular species
+  SPP <- subset(trainingData, species == sppA[s]) #equiv to data[data$species == sppA[s], ]
+  #SPP[is.na(SPP),] #check if there are any NA values
+  SPPs <- cbind(SPP[,5:18], SPP[,19:24])
+  SPPs[,1:12] <- scale(SPPs[,1:12]) #scale the continuous variables
+  SPPs[,14] <- scale(SPPs[,14])
+  SPPs[is.na(SPPs)] <- 0
+  SPP <- cbind(SPP[,2:4], SPPs[,1:14], SPP[,19:24])
+  #SPP[is.na(SPP),]
+  SPP <- na.omit(SPP)
+  SPP[,17] <- log(SPP[,17] + 1)
+  for(d in 1:length(dataset)){
+    print(paste("Working on dataset1", dataset[d]))
+    dataT <- subset(SPP, data == dataset[d]) #NEED TO REPEAT WITH VALIDATION DATA
+  
+  #subset to predictors determined to be important for the given species
+  SPPvars <- subset(varLists, Dataset == dataset[d] & Species == sppA[s] & In == "1")
+  final.data <- dataT[,c("count", "size", as.vector(unique(SPPvars$Variable)))]
+  #final.data[is.na(final.data),]
+  head(final.data)
+  
+  
+  #create the formula that will be used for the glm
+  frm1 <- noquote(paste0(unique(SPPvars$Variable), collapse=" + "))
+  frm2 <- paste0("count ~ ", frm1)
+  temp.glm <- glm(frm2, data=final.data, family=poisson, na.action = na.pass)
+  #run stepAIC to chose the best model
+ # mods <- stepAIC(temp.glm, direction="both", criteria="AICc") #k=log(nrow(final.data)),
+  #mods
+  #summary(mods)
+  
+#fullHabMod <- lmer(SppRichnessResiduals ~ CLASS + Type + pWETLA + pGRASS + pWOODL + coverDiversity + naturalLandDiversity + (1|SiteID), data =  PPdat, na.action = na.pass)
+  dd <- dredge(temp.glm, m.lim = c(0, round(nrow(final.data)/10, 0)))
+  candidates <- get.models(dd, subset = TRUE)
+  mdlN0 <- c(1:length(candidates))
+  modelList <- data.frame(model = rep(NA, max(mdlN0)), k = rep(NA, max(mdlN0)), adjRsq = rep(NA, max(mdlN0)))
+  n <- nrow(final.data) #n = sample size
+  #k <- length(final.data) - 2 #number of explanatory parameters considered
+  for(i in mdlN0){
+    #frm <- as.formula(paste0("candidates$'",i, "'$formula"))
+    frmO <- as.formula(paste0(paste(as.character(candidates[[i]]$formula[2]),
+                                    as.character(candidates[[i]]$formula[1]),
+                                    as.character(candidates[[i]]$formula[3]))))
+    mdl <- glm(frmO, data = final.data, family = poisson, offset = log(size +1), na.action = na.pass)
+    chiSq <- sum(residuals(mdl, type = "pearson")^2) #Pearson's Chi-sq statistic
+    modelList$k[i] <- length(mdl$coefficients) - 1 #number of explanatory parameters considered in current model
+    modelList$adjRsq[i] <- 1 - ((mdl$deviance + modelList$k[i]*(chiSq/(n-modelList$k[i]-1)))/ mdl$null.deviance)#adjusted pseudo R-squared statistic
+    modelList$model[i] <-  as.character(candidates[[i]]$formula[3])
+  }
+  
+  md1 <- as.formula(paste0("count ~ ", modelList[which.max(modelList$adjRsq),1])) #find value with max rSq
+  k1 <- modelList[which.max(modelList$adjRsq),2]
+  #Does the best model include coverDiversity or naturalLandDiversity, if so test if the rsq goes up with addition of squared term
+  
+  mod1 <- glm(md1, data = final.data, family = poisson, offset = log(size + 1), na.action = na.pass)
+  chi1 <- sum(residuals(mod1, type = "pearson")^2) #Pearson's Chi-sq statistic
+  adjRsq1 <- 1 - ((mod1$deviance + k1*(chi1/(n-k1-1)))/ mod1$null.deviance)
+  if(grepl('localDiversity', md1[3], fixed=TRUE)){
+    final.data$LD2 <- final.data$localDiversity^2
+    md2 <- paste0("count ~ ", md1[3], " + LD2")
+    mod2 <- glm(md2, data = final.data, family = poisson, na.action = na.pass)
+    chi2 <- sum(residuals(mod2, type = "pearson")^2) #Pearson's Chi-sq statisti
+    k2 <- length(mod2$coefficients) - 1 
+    adjRsq2 <- 1 - ((mod2$deviance + (k2)*(chi2/(n-(k2)-1)))/ mod2$null.deviance)
+    bMod <- as.formula(get(paste0("mod", which.max(c(adjRsq1, adjRsq2)))))
+    adjRsq3 <- max(c(adjRsq1, adjRsq2))
+    k <- ifelse(adjRsq1 > adjRsq2, k1, k2)
+  } else {
+    bMod <- md1
+    adjRsq3 <- adjRsq1
+    k <- k1
+  } 
+  mod3 <- glm(bMod, data = final.data, family = poisson, offset = log(size + 1), na.action = na.pass)
+  k3 <- k
+  if(grepl('naturalLandDiversity', bMod[3], fixed=TRUE)){
+    final.data$NLD2 <- final.data$naturalLandDiversity^2
+    md4 <- paste0("count ~ ", bMod[3], " + NLD2")
+    mod4 <- glm(md4, data = final.data, family = poisson, na.action = na.pass)
+    chi3 <- sum(residuals(mod3, type = "pearson")^2) #Pearson's Chi-sq statistic
+    chi4 <- sum(residuals(mod4, type = "pearson")^2) #Pearson's Chi-sq statistic
+    k4 <- length(mod4$coefficients) - 1 
+    adjRsq4 <- 1 - ((mod4$deviance + (k4)*(chi4/(n-(k4)-1)))/ mod4$null.deviance)
+    bMod <- as.formula(get(paste0("mod", which.max(c(0, 0, adjRsq3, adjRsq4)))))
+    k <- ifelse(adjRsq3 > adjRsq4, k3, k4)
+  } else { 
+    bMod <- bMod
+    k <- k
+  } 
+  bestMod <- glm(bMod, data =  final.data, family = poisson, offset = log(size + 1), na.action = na.pass)
+  if(grepl('localDiversity', bMod[3], fixed=TRUE)){
+    apR2 <- max(c(adjRsq1, adjRsq2))
+  } else { 
+    apR2 <- modelList[which.max(modelList$adjRsq),3]
+  } 
+  if(grepl('naturalLandDiversity', bMod[3], fixed=TRUE)){
+    apR2 <- max(c(adjRsq3, adjRsq4))
+  } else { 
+    apR2 <- apR2
+  } 
+  
+  #save final data
+  finalDataName <- paste0("final.data.", dataset[d], sppA[s])
+  assign(paste("final.data.", dataset[d], sppA[s], sep=""), final.data)
+  r <- which(grepl(dataset[d], table3$dataset) & grepl(sppA[s], table3$species))
+  #test for Poisson vs. Neg Bin
+  p1 <- glm(bMod, data = final.data, family = poisson, offset = log(size + 1))
+  nb <- P__disp(p1)
+  if(nb[[2]] > 1){
+    final.data$offSize <- offset(log(final.data$size + 1))
+    offMod <- update(bMod, . ~ . + offSize)
+    table3$distribution[r] <- paste("NB") #note that neg bin is used in the table
+    p1 <- glm.nb(offMod, data = final.data)#convert p1 to the neg bin
+    dist <- "negbin"
+  } else {
+    table3$distribution[r] <- paste("P")#note that poisson is used in the table
+    p1 <- p1 #p1 stays the same
+    dist <- "poisson"
+    
+  }
+  
+  #test for zero inflation
+  frm3 <- paste0(bMod, "|1")
+  frm4 <- as.formula(paste0( "count ~ ", frm3[3]))
+  z1 <- zeroinfl(frm4, data = final.data, dist = dist)
+  vuong(p1, z1) #see https://stats.idre.ucla.edu/r/dae/zip/ 
+  
+  
+  #get table 1 values
+  table3$bestModel[r] <- as.character(bestMod$formula[3])
+  table3$pseudoR2[r] <- apR2
+  table3$pR2[r] <- 1 - (bestMod$deviance/bestMod$null.deviance)
+  table3$k[r] <- k
+  
+  #get appendix 1 values
+  appendix1$NullDev[r] <- bestMod$null.deviance
+  appendix1$ndDf[r] <- bestMod$df.null
+  appendix1$ResidualDev[r] <- bestMod$deviance
+  appendix1$rdDf[r] <- bestMod$df.residual
+  appendix1$Pchi2[r] <- nb[[1]]
+  appendix1$Pdisp[r] <- nb[[2]]
+  
+  #appendix 2
+  appendix2$Intercept[r] <- bestMod$coefficients[["(Intercept)"]]
+  appendix2se$Intercept[r] <- getCoef(bestMod, "(Intercept)")[2]
+  appendix2$hydroperiod[r] <- getCoef(bestMod, "hydroperiod")[1]
+  appendix2se$hydroperiod[r] <- getCoef(bestMod, "hydroperiod")[2]
+  appendix2$alkali[r] <- getCoef(bestMod, "alkali")[1]
+  appendix2se$alkali[r] <- getCoef(bestMod, "alkali")[2]
+  appendix2$area[r] <- getCoef(bestMod, "area")[1]
+  appendix2se$area[r] <- getCoef(bestMod, "area")[2]
+  appendix2$OW[r] <- getCoef(bestMod, "OW")[1]# mods$coefficients[["final.data$OW"]]
+  appendix2se$OW[r] <- getCoef(bestMod, "OW")[2]
+  appendix2$SM[r] <- getCoef(bestMod, "SM")[1]
+  appendix2se$SM[r] <- getCoef(bestMod, "SM")[2]
+  appendix2$EV[r] <- getCoef(bestMod, "EV")[1]
+  appendix2se$EV[r] <- getCoef(bestMod, "EV")[2]
+  appendix2$WM[r] <- getCoef(bestMod, "WM")[1]
+  appendix2se$WM[r] <- getCoef(bestMod, "WM")[2]
+  appendix2$Grassland[r] <- getCoef(bestMod, "Grass400")[1]
+  appendix2se$Grassland[r] <- getCoef(bestMod, "Grass400")[2]
+  appendix2$Forest[r] <- getCoef(bestMod, "Forest400")[1]
+  appendix2se$Forest[r] <- getCoef(bestMod, "Forest400")[2]
+  appendix2$Crop[r] <- getCoef(bestMod, "Crop400")[1]
+  appendix2se$Crop[r] <- getCoef(bestMod, "Crop400")[2]
+  appendix2$coverDiversity[r] <- getCoef(bestMod, "localDiversity")[1]
+  appendix2se$coverDiversity[r] <- getCoef(bestMod, "localDiversity")[2]
+  appendix2$coverDiversity2[r] <- getCoef(bestMod, "LD2")[1]
+  appendix2se$coverDiversity2[r] <- getCoef(bestMod, "LD2")[2]
+  appendix2$landDiversity[r] <- getCoef(bestMod, "naturalLandDiversity")[1]
+  appendix2se$landDiversity[r] <- getCoef(bestMod, "naturalLandDiversity")[2]
+  appendix2$landDiversity2[r] <- getCoef(bestMod, "NLD2")[1]
+  appendix2se$landDiversity2[r] <- getCoef(bestMod, "NLD2")[2]
+  #validation
+  
+  #validation
+  SPPv <- subset(validationData, species == sppA[s]) #equiv to data[data$species == sppA[s], ]
+  #SPPv[is.na(SPPv),] #check if there are any NA values
+  SPPvs <- cbind(SPPv[,5:18], SPPv[,20:24])
+  SPPvs[,1:12] <- scale(SPPvs[,1:12])#scale the continuous variables
+  SPPvs[,14] <- scale(SPPvs[,14])
+  SPPvs[is.na(SPPvs)] <- 0
+  SPPv <- cbind(SPPv[,2:4], SPPvs[,1:14], SPPv[,19:24])
+  #SPPv[is.na(SPPv),]
+  SPPv <- na.omit(SPPv)
+  dataV <- subset(SPPv, data == dataset[d])
+  
+  final.data <- dataV[,c("count", "size", as.vector(unique(SPPvars$Variable)))]
+  #final.data[is.na(final.data),]
+  
+  if(grepl('+ LD2', as.character(bMod)[3], fixed=TRUE)){
+    final.data$LD2 <- final.data$localDiversity^2
+  }
+  
+  if(grepl('NLD2', as.character(bMod)[3], fixed=TRUE)){
+    final.data$NLD2 <- final.data$naturalLandDiversity^2
+  }
+  
+  #amount of explained variance
+  vn <- nrow(final.data) #n = sample size
+
+  
+  if(nb[[2]] > 1){
+    final.data$offSize <- offset(log(final.data$size + 1))
+    offMod <- update(bMod, . ~ . + offSize)
+    vbMod <- glm.nb(offMod, data = final.data)
+  } else {
+    offMod <- bMod
+    vbMod <- glm(offMod, data = final.data, family = poisson, offset = log(size + 1))
+  }
+  
+
+  
+  
+  
+  vchi2 <- sum(residuals(vbMod, type = "pearson")^2) #Pearson's Chi-sq statistic
+  vk <- k
+  vpR2 <- 1 - ((vbMod$deviance + vk*(vchi2/(vn-vk-1)))/ vbMod$null.deviance)#adjusted pseudo R-squared statistic
+  
+  #add to table
+  table3v$bestModel[r] <- as.character(offMod[3])
+  table3v$pseudoR2[r] <- vpR2
+  table3v$pR2[r] <- 1 - (vbMod$deviance/vbMod$null.deviance)
+  table3v$k[r] <- vk
+  
+  appendix1v$NullDev[r] <- vbMod$null.deviance
+  appendix1v$ndDf[r] <- vbMod$df.null
+  appendix1v$ResidualDev[r] <- vbMod$deviance
+  appendix1v$rdDf[r] <- vbMod$df.residual
+  
+    for(e in 1:length(dataset)){
+      print(paste("Working on dataset2", dataset[e]))
+      dataTe <- subset(trainingData, data == dataset[e]) #NEED TO REPEAT WITH VALIDATION DATA
+      dataVe <- subset(validationData, data == dataset[e])
+      dataCe <- rbind(dataTe, dataVe)
+      
+      print(paste("Working on species", sppA[s])) #This just let's us know that it is working on a particular species
+      SPPe <- subset(dataCe, species == sppA[s]) #equiv to data[data$species == sppA[s], ]
+      SPPe[is.na(SPPe),] #check if there are any NA values
+        SPPse <- cbind(SPPe[,5:18], SPPe[,20:24])
+        SPPse <- scale(SPPse[,1:14]) #scale the continuous variables
+        SPPse[is.na(SPPse)] <- 0
+        SPPe <- cbind(SPPe[,2:4], SPPse[,1:14], SPPe[,19:24])
+        SPPe[is.na(SPPe),]
+        SPPe <- na.omit(SPPe)
+    
+        #subset to predictors determined to be important for the given species
+        SPPvars <- subset(varLists, Dataset == dataset[d] & Species == sppA[s] & In == "1")
+        final.data <- SPPe[,c("count", "size", as.vector(unique(SPPvars$Variable)))]
+        final.data[is.na(final.data),]
+        head(final.data)
+        
+        
+        if(grepl('+ LD2', as.character(bMod)[3], fixed=TRUE)){
+          final.data$LD2 <- final.data$localDiversity^2
+        }
+        
+        if(grepl('NLD2', as.character(bMod)[3], fixed=TRUE)){
+          final.data$NLD2 <- final.data$naturalLandDiversity^2
+        }
+        
+        en <- nrow(final.data) #n = sample size
+        
+        
+        if(nb[[2]] > 1){
+          final.data$offSize <- offset(log(final.data$size + 1.3))
+          offMod <- update(bMod, . ~ . + offSize)
+          eMod <- glm.nb(offMod, data = final.data, na.action = na.pass)
+        } else {
+          eMod <- glm(bMod, data = final.data, family = poisson, offset = log(size + 1.3), na.action = na.pass)
+        }
+        
+        #amount of explained variance
+        echi2 <- sum(residuals(eMod, type = "pearson")^2) #Pearson's Chi-sq statistic
+        ek <- k
+        epR2 <- 1 - ((eMod$deviance + ek*(echi2/(en-ek-1)))/ eMod$null.deviance)#adjusted pseudo R-squared statistic
+        
+        r <- which(grepl(dataset[d], table3$dataset) & grepl(sppA[s], table3$species))
+        table3[r,paste0("region", e)] <- epR2
+       
+      } #end dataset 2
+  mdlName <- paste0(sppA[s], dataset[d])
+  assign(paste(sppA[s], dataset[d], sep=""), p1)
+  
+  } #end dataset1
+} #end spp
+
+dwplot(AMBIGLCWMP)
+dwplot(AMBIGLMMP)
+
+table3$val <- rep("training")
+table3v$val <- rep("validation")
+
+appendix1$val <- rep("training")
+appendix1v$val <- rep("validation")
+
+table3 <- rbind(table3, table3v)
+appendix1 <- rbind(appendix1,appendix1v)
+appendix2 <- rbind(appendix2, appendix2se)
+
+write.csv(table3, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/20220309_table3_scale_sampSize.csv", quote=T, row.names=F)
+write.csv(appendix1, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/20220309_appendix1_scale_sampSize.csv", quote=T, row.names=F)
+write.csv(appendix2, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/20220309_appendix2_scale_sampSize.csv", quote=T, row.names=F)
+
+
+write.csv(table3, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Tables/table3.csv", quote=T, row.names=F)
+write.csv(appendix1, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Tables/appendix1.csv", quote=T, row.names=F)
+write.csv(appendix2, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Tables/appendix2.csv", quote=T, row.names=F)
+
+#Save the final dataset for ea. regionXspecies combo
+write.csv(final.data.GLCWMPPBGR, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLCWMPPBGR.csv", quote=T, row.names=F)
+
+write.csv(final.data.GLMMPPBGR, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLMMPPBGR.csv", quote=T, row.names=F)
+
+write.csv(final.data.PPDWMPPBGR, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.PPDWMPPBGR.csv", quote=T, row.names=F)
+
+write.csv(final.data.GLCWMPVIRA, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLCWMPVIRA.csv", quote=T, row.names=F)
+
+write.csv(final.data.GLMMPVIRA, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLMMPVIRA.csv", quote=T, row.names=F)
+
+write.csv(final.data.PPDWMPVIRA, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.PPDWMPVIRA.csv", quote=T, row.names=F)
+
+write.csv(final.data.GLCWMPSORA, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLCWMPSORA.csv", quote=T, row.names=F)
+
+write.csv(final.data.GLMMPSORA, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLMMPSORA.csv", quote=T, row.names=F)
+
+write.csv(final.data.PPDWMPSORA, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.PPDWMPSORA.csv", quote=T, row.names=F)
+
+write.csv(final.data.GLCWMPAMBI, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLCWMPAMBI.csv", quote=T, row.names=F)
+
+write.csv(final.data.GLMMPAMBI, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.GLMMPAMBI.csv", quote=T, row.names=F)
+
+write.csv(final.data.PPDWMPAMBI, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/final.data.PPDWMPAMBI.csv", quote=T, row.names=F)
+
+
+
+
+```
+#Save models
+```{r}
+xPBGR <- bind_rows(
+  tidy(PBGRGLCWMP) %>% mutate(model = "CWMP"), 
+  tidy(PBGRGLMMP) %>% mutate(model = "GLMMP"), 
+  tidy(PBGRPPDWMP) %>% mutate(model = "DWS")) %>% arrange(desc(model))
+
+xVIRA <- bind_rows(
+  tidy(VIRAGLCWMP) %>% mutate(model = "CWMP"), 
+  tidy(VIRAGLMMP) %>% mutate(model = "GLMMP"), 
+  tidy(VIRAPPDWMP) %>% mutate(model = "DWS")) %>% arrange(desc(model))
+
+xSORA <- bind_rows(
+  tidy(SORAGLCWMP) %>% mutate(model = "CWMP"), 
+  tidy(SORAGLMMP) %>% mutate(model = "GLMMP"), 
+  tidy(SORAPPDWMP) %>% mutate(model = "DWS")) %>% arrange(desc(model))
+
+xAMBI <- list(AMBIGLCWMP, AMBIGLMMP, AMBIPPDWMP)
+xAMBI <- bind_rows(
+  tidy(AMBIGLCWMP) %>% mutate(model = "CWMP"), 
+  tidy(AMBIGLMMP) %>% mutate(model = "GLMMP"), 
+  tidy(AMBIPPDWMP) %>% mutate(model = "DWS")) %>% arrange(desc(model))
+
+
+write.csv(xPBGR, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/xPBGR.csv", quote=T, row.names=F)
+
+write.csv(xVIRA, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/xVIRA.csv", quote=T, row.names=F)
+
+write.csv(xSORA, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/xSORA.csv", quote=T, row.names=F)
+
+write.csv(xAMBI, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Data/xAMBI.csv", quote=T, row.names=F)
+```
+
+```{r}
+library(sessioninfo)
+sessionInfo()
+```

@@ -1,0 +1,346 @@
+---
+title: "Results section"
+author: "Lisa"
+date: "3/15/2022"
+output:
+  word_document: default
+  html_document: default
+---
+
+
+## RESULTS
+#Tables:
+
+```{r}
+library(data.table)
+library(dplyr)
+library(stringr)
+
+#Read in the table data
+tableDat <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Tables/table3.csv")
+tableDat$key3 <- paste(tableDat$species, tableDat$dataset, tableDat$val)
+
+#Read in the landscape-only results & combine with the R
+tableDat_Land <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Tables/table3_Landscape.csv")
+tableDat_Land$key3 <- paste(tableDat_Land$species, tableDat_Land$dataset, tableDat_Land$val)
+tableDat <- merge(tableDat, tableDat_Land[,c("key3", "pseudoR2")], by = "key3")
+
+#Correct variable levels & names
+tableDat$dataset <- factor(tableDat$dataset, ordered = TRUE, levels = c("GLCWMP", "GLMMP", "PPDWMP")) #turn dataset into a factor
+levels(tableDat$dataset) <- c("CWMP", "GLMMP", "DWS") #change dataset names
+oldnames<-c("species", "dataset", "bestModel", "distribution", "k", "val", "pseudoR2.x", "pseudoR2.y") #create vector with the names as they originally get input from the csv file
+newnames<-c("Species", "Dataset", "Best model", "Distribution", "K", "Sample", "pseudoR2", "pseudoR2_Land") #create vector with new names
+setnames(tableDat, oldnames, newnames) #use the setnames() function to re-assign the header names for the columns with the oldnames to the newnames
+head(tableDat)
+
+#TABLE3
+table3 <- tableDat[tableDat$Sample == "training", c("Species", "Dataset", "Best model")]
+table3$`Best model`<- str_replace_all(table3$`Best model`, c("area" = "Area", "Forest400" = "Forest%",
+                                                             "Crop400" = "Crop%", "Grass400" = "Grass%",
+                                                             "hydroperiod" = "Hydroperiod", "alkali" = "Alkali",
+                                                             "NLD2" = "LandHet2", "LD2" = "LocalHet2",
+                                                             "localDiversity" = "LocalHet",
+                                                             "naturalLandDiversity" = "LandHet"))
+table3$`Best model`<- str_remove(table3$`Best model`, "\\+ 1")
+
+table3
+#write.csv(table3, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Tables/Table3_Pub.csv")
+
+
+```
+
+```{r}
+#TABLE4
+trainingDat <- subset(tableDat, tableDat$Sample == "training")
+trainingDat$SpDat <- paste(trainingDat$Species, trainingDat$Dataset)
+valDat <- subset(tableDat, tableDat$Sample == "validation")
+valDat$SpDat <- paste(valDat$Species, valDat$Dataset)
+tablePrep <- merge(trainingDat, valDat, by = "SpDat")
+#round to 2 decimal places, multiply by 100
+table4 <- data.frame(Species = tablePrep$Species.x, Dataset = tablePrep$Dataset.x, 
+                     pseudoR2 = round(tablePrep$pseudoR2.x, 2)*100,
+                     pseudoR2_Land = round(tablePrep$pseudoR2_Land.x, 2)*100,
+                     region1 = round(tablePrep$region1.x, 2)*100,
+                     region2 = round(tablePrep$region2.x, 2)*100,
+                     region3 = round(tablePrep$region3.x, 2)*100,
+                     pseudoR2_v = round(tablePrep$pseudoR2.y, 2)*100,
+                     pseudoR2_Land_v = round(tablePrep$pseudoR2_Land.y, 2)*100)
+#Negative values for pseudo-R2 get reported as 0s
+for(r in 1:nrow(table4)){
+  table4$pseudoR2[r] <- ifelse(table4$pseudoR2[r] <0, 0, table4$pseudoR2[r])
+  table4$pseudoR2_Land[r] <- ifelse(table4$pseudoR2_Land[r] <0, 0, table4$pseudoR2_Land[r])
+  table4$region1[r] <- ifelse(table4$region1[r] <0, 0, table4$region1[r])
+  table4$region2[r] <- ifelse(table4$region2[r] <0, 0, table4$region2[r])
+  table4$region3[r] <- ifelse(table4$region3[r] <0, 0, table4$region3[r])
+  table4$pseudoR2_v[r] <- ifelse(table4$pseudoR2_v[r] <0, 0, table4$pseudoR2_v[r])
+  table4$pseudoR2_Land_v[r] <- ifelse(table4$pseudoR2_Land_v[r] <0, 0, table4$pseudoR2_Land_v[r])
+}
+
+#ADD PARENTHESES AROUND VALIDATION SCORES for pseudoR2
+table4_pub <- data.frame(Species = table4$Species, Dataset = table4$Dataset, pseudoR2 = rep(NA),
+                         pseudoR2_Land = rep(NA), region1=rep(NA), region2=rep(NA), region3=rep(NA))
+for(i in 1:nrow(table4_pub)){
+  table4_pub$pseudoR2[i] <- paste0(table4$pseudoR2[i], " (", table4$pseudoR2_v[i], ")")
+  table4_pub$pseudoR2_Land[i] <- paste0(table4$pseudoR2_Land[i], " (", table4$pseudoR2_Land_v[i], ")")
+}
+
+#CALCULATE THE ACROSS-REGION SCORES
+for(i in 1:nrow(table4_pub)){
+  if(table4_pub$Dataset[i] == "CWMP"){
+    table4_pub$region1[i] <- round(table4$region1[i]/table4$region1[i], 2)*100
+    table4_pub$region2[i] <- round(table4$region2[i]/table4$region1[i], 2)*100
+    table4_pub$region3[i] <- round(table4$region3[i]/table4$region1[i], 2)*100
+  }else{
+    if(table4_pub$Dataset[i] == "GLMMP"){
+      table4_pub$region1[i] <- round(table4$region1[i]/table4$region2[i], 2)*100
+      table4_pub$region2[i] <- round(table4$region2[i]/table4$region2[i], 2)*100
+      table4_pub$region3[i] <- round(table4$region3[i]/table4$region2[i], 2)*100 
+    } else{
+      if(table4_pub$Dataset[i] == "DWS"){
+        table4_pub$region1[i] <- round(table4$region1[i]/table4$region3[i], 2)*100
+        table4_pub$region2[i] <- round(table4$region2[i]/table4$region3[i], 2)*100
+        table4_pub$region3[i] <- round(table4$region3[i]/table4$region3[i], 2)*100
+      } #end DWS
+    } #end NOT GLMMP
+  } #end NOT CWMP
+} #end loop over table4_pub
+
+pctInRegionBetter <- 100 - (sum(table4_pub$region1 > 100, table4_pub$region2 > 100, table4_pub$region3 > 100)/(2*nrow(table4_pub))*100)
+#Sort by species and dataset
+table4_pub<- table4_pub[order(factor(table4_pub$Species, ordered= TRUE, levels = c("PBGR", "VIRA", "SORA", "AMBI")), factor(table4_pub$Dataset, ordered = TRUE, levels = c("CWMP", "GLMMP", "DWS"))),]
+#Rename columns
+t4oldnames <- c("pseudoR2", "pseudoR2_Land", "region1", "region2", "region3")
+t4newnames <- c("Adjusted pseudo-R2", "Landscape-only adjusted pseudo-R2", 
+                "CWMP  adjusted pseudo-R2", "GLMMP  adjusted pseudo-R2", "DWS  adjusted pseudo-R2")
+setnames(table4_pub, t4oldnames, t4newnames)
+#rename species
+table4_pub$Species<- str_replace_all(table4_pub$Species, c("PBGR" = "Pied-billed Grebe", "VIRA" = "Virginia Rail",
+                                                             "SORA" = "Sora", "AMBI" = "American Bittern"))
+
+#table4_pub
+
+
+library(flextable)
+ft <- flextable(table4_pub)
+ft %>%
+  align(part = "all", align = "center") %>%
+  align(j = c("Species", "Dataset"), part = "all", align = "left") %>%
+  merge_v(j = c("Species")) %>%
+  valign(j = c("Species"), valign = "top", part = "body") %>%
+  fix_border_issues(part = "all")%>%
+  font(fontname = "Times New Roman", part = "all")%>%
+  fontsize(size = 10, part = "all")
+ 
+#WILL NEED TO ALIGN BY DECIMALS
+#NEED TO SAVE THE ft
+```
+
+
+
+
+```{r}
+table4
+write.csv(table4, "C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Tables/Table4_Pub.csv")
+
+
+#ORDER TABLE BY SP. Dataset, sample
+orderedTable<- tableDat[order(factor(tableDat$Species, ordered= TRUE, levels = c("PBGR", "VIRA", "SORA", "AMBI")), tableDat$Dataset, tableDat$Sample),]
+head(orderedTable)
+
+```
+
+
+
+##CAN WE DO THE COMMONALITIES AND TABLE 3 (+/- values) FROM THE APPENDIX 3?
+
+```{r}
+for(r in 1:nrow(table3)){
+  table3$vars[r] <- as.list(strsplit(table3$`Best model`[r], "\\+"))
+}
+```
+
+
+#Appendices
+```{r}
+##Appendix 2
+#prep data
+app2Dat <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Tables/appendix1.csv")
+app2Dat$dataset<- str_replace_all(app2Dat$dataset, c("GLCWMP" = "CWMP", "PPDWMP" = "DWS"))
+app2Dat$Key <- paste(app2Dat$species, app2Dat$dataset, app2Dat$val)
+
+app2Add <- data.frame(Key = paste(tableDat$Species, tableDat$Dataset,
+                                  tableDat$Sample), 
+                      K = tableDat$K, Distribution = tableDat$Distribution)
+app2Dat <- merge(app2Dat, app2Add, by = "Key")
+head(app2Dat)
+
+#Create dataframe for table
+app2Df <- data.frame(Species = app2Dat$species, Dataset = app2Dat$dataset,
+                     K = app2Dat$K, Distribution = app2Dat$Distribution, 
+                     Sample = app2Dat$val,
+                     NullDev = paste(round(app2Dat$NullDev, 1), " (", 
+                                     app2Dat$ndDf, ")"),
+                     ResidDev = paste0(round(app2Dat$ResidualDev, 1), " (", 
+                                     app2Dat$rdDf, ")"))
+
+#Sort by species and dataset
+app2Df <- app2Df[order(factor(app2Df$Species, ordered= TRUE, levels = c("PBGR", "VIRA", "SORA", "AMBI")), factor(app2Df$Dataset, ordered = TRUE, levels = c("CWMP", "GLMMP", "DWS"))),]
+#Formal text for inside table
+app2Df$Species<- str_replace_all(app2Df$Species, 
+                  c("PBGR" = "Pied-billed Grebe", "VIRA" = "Virginia Rail",
+                    "SORA" = "Sora", "AMBI" = "American Bittern"))
+app2Df$Distribution <- str_replace_all(app2Df$Distribution, c("P" = "Poisson", 
+                    "NB" = "Negative Binomial", "0" = ""))
+app2Df$Sample <- str_replace_all(app2Df$Sample, c("training" = "Training", 
+                                        "validation" = "Validation"))
+#Change column names
+app2oldnames <- c("NullDev", "ResidDev")
+app2newnames <- c("Null deviance (df)", "Residual deviance (df)")
+setnames(app2Df, app2oldnames, app2newnames)
+
+#app2Df
+#create appendix 2
+library(flextable)
+app2 <- flextable(app2Df)
+app2 %>%
+  align(part = "all", align = "left") %>%
+  align(j = c(6, 7), 
+        part = "all", align = "center") %>%
+  merge_v(j = c("Species", "Dataset")) %>%
+  valign(valign = "top", part = "body") %>%
+  fix_border_issues(part = "all")%>%
+  font(fontname = "Times New Roman", part = "all")%>%
+  fontsize(size = 10, part = "all")
+
+#save the appendix file?
+```
+```{r}
+##Appendix 3
+#prep data
+app3Dat <- read.csv("C:/Users/Lisa/Dropbox/Dissertation/Manuscripts/Regional/RegionalMsProject/RegionalMs/Tables/appendix2.csv")
+app3Dat$dataset<- str_replace_all(app3Dat$dataset, c("GLCWMP" = "CWMP", "PPDWMP" = "DWS"))
+app3Df <- app3Dat
+#Sort by species and dataset
+app3Df <- app3Df[order(factor(app3Df$species, ordered= TRUE, levels = c("PBGR", "VIRA", "SORA", "AMBI")), factor(app3Df$dataset, ordered = TRUE, levels = c("CWMP", "GLMMP", "DWS"))),]
+
+#Change column names
+app3oldnames <- c("species", "dataset", "Intercept", "alkali", "area", "hydroperiod", "Grassland", 
+                  "coverDiversity", "coverDiversity2", "landDiversity", "landDiversity2")
+app3newnames <- c("Species", "Dataset", "Int", "Alk", "Area", "Hydroperiod", "Grass", 
+                  "Local Het", "Local Het2", "Land Het", "Land Het2")
+setnames(app3Df, app3oldnames, app3newnames)
+
+#Round
+for(r in 1:nrow(app3Df)){
+  app3Df$Int[r] <- round(app3Df$Int[r], 2)
+  app3Df$Alk[r] <- round(app3Df$Alk[r], 2)
+  app3Df$Area[r] <- round(app3Df$Area[r], 2)
+  app3Df$Hydroperiod[r] <- round(app3Df$Hydroperiod[r], 3)
+  app3Df$EV[r] <- round(app3Df$EV[r], 2)
+  app3Df$OW[r] <- round(app3Df$OW[r], 2)
+  app3Df$SM[r] <- round(app3Df$SM[r], 2)
+  app3Df$WM[r] <- round(app3Df$WM[r], 2)
+  app3Df$Crop[r] <- round(app3Df$Crop[r], 2)
+  app3Df$Forest[r] <- round(app3Df$Forest[r], 2)
+  app3Df$Grass[r] <- round(app3Df$Grass[r], 2)
+  app3Df$`Local Het`[r] <- round(app3Df$`Local Het`[r], 2)
+  app3Df$`Local Het2`[r] <- round(app3Df$`Local Het2`[r], 2)
+  app3Df$`Land Het`[r] <- round(app3Df$`Land Het`[r], 2)
+  app3Df$`Land Het2`[r] <- round(app3Df$`Land Het2`[r], 2)
+}
+
+app3Df[is.na(app3Df)] <- ''
+
+library(flextable)
+app3 <- flextable(app3Df)
+app3 %>%
+  align(part = "all", align = "center") %>%
+  align(j = c(1, 2), 
+        part = "all", align = "left") %>%
+  merge_v(j = c("Species", "Dataset")) %>%
+  valign(valign = "top", part = "body") %>%
+  fix_border_issues(part = "all") %>%
+  italic(i = c(2,4,6,8,10,12,14,16,18,20,22,24), italic = TRUE, part = "body")%>%
+  font(fontname = "Times New Roman", part = "all")%>%
+  fontsize(size = 10, part = "all")
+
+```
+
+#Table3
+```{r}
+t3 <- app3Dat[1:12, ]
+t3$vars <- 1
+t3[is.na(t3)] <- 0
+t3
+for(r in 1:nrow(t3)){
+  for(c in 4:(length(t3)-1)){
+    if(t3[r,c] > 0){
+      t3$vars[r] <- paste(t3$vars[r], "+", names(t3[c]))
+    } else{
+      if(t3[r,c] < 0){
+        t3$vars[r] <- paste(t3$vars[r], "-", names(t3[c]))
+      } else{
+        t3$vars[r] <- t3$vars[r]
+      }
+    }
+  }
+}
+
+table3 <- data.frame(Species = t3$Species, Dataset = t3$Dataset, Bestmodel = t3$vars)
+tab3oldnames <- c("Bestmodel")
+tab3newnames <- c("Best model")
+setnames(table3, tab3oldnames, tab3newnames)
+table3
+
+library(flextable)
+ft3 <- flextable(table3)
+ft3 <- autofit(ft3)
+ft3 %>%
+  align(part = "all", align = "left") %>%
+  merge_v(j = c("Species")) %>%
+  valign(valign = "top", part = "body") %>%
+  fix_border_issues(part = "all") %>%
+  font(fontname = "Times New Roman", part = "all")%>%
+  fontsize(size = 10, part = "all")
+
+
+```
+```{r}
+t3oldnames <- c("Local Het", "Local Het2", "Land Het", "Land Het2")
+t3newnames <- c("LocalHet", "LocalHet2", "LandHet", "LandHet2")
+setnames(t3, t3oldnames, t3newnames)
+```
+
+#TEXT
+#Within-region analysis:
+
+Our models for individual species had an adjusted pseudo-R2 of `r round(mean(table4$pseudoR2), 0)` ± `r round(sd(table4$pseudoR2))` % (mean ± SD; Table 4). The three region-specific models had a mean adjusted pseudo-R2explanatory power of `r round(mean(table4[table4$Species == "PBGR",c("pseudoR2")]), 0)` ± `r round(sd(table4[table4$Species == "PBGR",c("pseudoR2")]), 0)` % for Pied-billed Grebe, `r round(mean(table4[table4$Species == "VIRA",c("pseudoR2")]), 0)` ± `r round(sd(table4[table4$Species == "VIRA",c("pseudoR2")]), 0)` % for Virginia Rail, `r round(mean(table4[table4$Species == "SORA",c("pseudoR2")]), 0)` ± `r round(sd(table4[table4$Species == "SORA",c("pseudoR2")]), 0)` % for Sora, and `r round(mean(table4[table4$Species == "AMBI",c("pseudoR2")]), 0)` ± `r round(sd(table4[table4$Species == "AMBI",c("pseudoR2")]), 0)` % for American Bittern. Only the Virginia Rail / CWMP and American Bittern / GLMMP models appeared to be over-fit: the adjusted pseudo-R2 value dropped from `r table4[table4$Species == "VIRA" & table4$Dataset == "CWMP", c("pseudoR2")]`  and `r table4[table4$Species == "AMBI" & table4$Dataset == "GLMMP", c("pseudoR2")]` (respectively) to `r table4[table4$Species == "VIRA" & table4$Dataset == "CWMP", c("pseudoR2_v")] + table4[table4$Species == "AMBI" & table4$Dataset == "GLMMP", c("pseudoR2_v")]` % when we evaluated the models with the validation datasets.  A simplified version of this model that included only the top two most important variables (percentages of crop and grass cover(`r tableDat_Land[tableDat_Land$species == "AMBI" & tableDat_Land$dataset == "GLMMP", c("bestModel")] `)) explained only `r table4[table4$Species == "AMBI" & table4$Dataset == "GLMMP", "pseudoR2_Land"]` % of variation in the training dataset and still failed to explain any variation in the validation dataset (`r table4[table4$Species == "AMBI" & table4$Dataset == "GLMMP", "pseudoR2_Land_v"]==0`).  `r sum((table4$pseudoR2_v - table4$pseudoR2)>=0)` of the `r nrow(table4)` models explained as much or more variation on the validation run, resulting overall in a mean change of adjusted pseudo-R2 of `r round(mean((table4$pseudoR2_v - table4$pseudoR2)), 0)` ± `r round(sd((table4$pseudoR2_v - table4$pseudoR2)), 0)` %. Some validation runs out-performed the training run by as much as `r round(max((table4$pseudoR2_v - table4$pseudoR2)), 0)` %. Those models that had reduced explanatory power after validation decreased in power by a mean of `r round(mean(subset(table4$pseudoR2 - table4$pseudoR2_v, table4$pseudoR2 - table4$pseudoR2_v <0)), 0)`  ± `r round(sd(subset(table4$pseudoR2 - table4$pseudoR2_v, table4$pseudoR2 - table4$pseudoR2_v <0)), 0)` %.
+
+Across species, the models created from the DWS data explained a median of `r round(median(table4[table4$Dataset == "DWS",c("pseudoR2")]), 0)` % of variation across the focal species within the Prairie Pothole Region. The CWMP models explained a median of `r round(median(table4[table4$Dataset == "CWMP",c("pseudoR2")]), 0)` % of variation across the focal species within Great Lakes coastal wetlands. The GLMMP models explained the least amount of variation, with a median explanatory power of `r round(median(table4[table4$Dataset == "GLMMP",c("pseudoR2")]), 0)` % of variation across the focal species within inland Great Lakes wetlands.
+
+#Local- versus landscape-scale covariates
+Landscape-only models explained `r round(mean(table4$pseudoR2_Land), 0)` ± `r round(sd(table4$pseudoR2_Land), 0)` % (mean ± SD; Table 4) of variation. Despite a lower number of parameters under consideration, and thus a reduced penalty to adjusted pseudo-R2 values, these models explained a mean of `r round(mean(table4$pseudoR2 - table4$pseudoR2_Land), 0)` ± `r round(sd(table4$pseudoR2 - table4$pseudoR2_Land), 0)` % less variation than the models that contained both local- and landscape-scale covariates. The over-fit Virginia Rail / CWMP model showed improved performance on validation runs (`r table4[table4$Species == "VIRA" & table4$Dataset == "CWMP", "pseudoR2_Land_v"] > table4[table4$Species == "VIRA" & table4$Dataset == "CWMP", "pseudoR2_v"]`) but not training runs (`r table4[table4$Species == "VIRA" & table4$Dataset == "CWMP", "pseudoR2_Land"] < table4[table4$Species == "VIRA" & table4$Dataset == "CWMP", "pseudoR2"]`), while the `r table4[which.min(table4$pseudoR2_Land), "Species"]` / `r table4[which.min(table4$pseudoR2_Land), "Dataset"]`  model (the lowest performing model overall) showed even worse performance in adjusted pseudo-R2 when using only landscape variables ((`r table4[which.min(table4$pseudoR2_Land), "pseudoR2_Land"] < table4[which.min(table4$pseudoR2_Land), "pseudoR2"]`)). The `r t3[t3$EV == 0 & t3$OW == 0 & t3$SM == 0 & t3$WM == 0, "Species"]` / `r t3[t3$EV == 0 & t3$OW == 0 & t3$SM == 0 & t3$WM == 0, "Dataset"]` model is the only model that contained no local-scale covariates (Table 3), and it is worth noting that this model performed inconsistently, with adjusted pseudo-R2 rising from `r table4[table4$Species == t3[t3$EV == 0 & t3$OW == 0 & t3$SM == 0 & t3$WM == 0, "Species"] & table4$Dataset == t3[t3$EV == 0 & t3$OW == 0 & t3$SM == 0 & t3$WM == 0, "Dataset"], c("pseudoR2")]` % to `r table4[table4$Species == t3[t3$EV == 0 & t3$OW == 0 & t3$SM == 0 & t3$WM == 0, "Species"] & table4$Dataset == t3[t3$EV == 0 & t3$OW == 0 & t3$SM == 0 & t3$WM == 0, "Dataset"], c("pseudoR2_v")]` % when the validation dataset was used.
+
+#Transferability across regions
+When we applied a model developed in one region to data collected in another region, our models generally explained less variation in species densities, with a median adjusted pseudo-R2 value of `r median(c(table4[table4$Dataset == "CWMP",c("region2")], table4[table4$Dataset == "CWMP",c("region2")], table4[table4$Dataset == "GLMMP",c("region1")], table4[table4$Dataset == "GLMMP",c("region3")], table4[table4$Dataset == "DWS",c("region1")], table4[table4$Dataset == "DWS",c("region2")]))` %, and a maximum of `r max(c(table4[table4$Dataset == "CWMP",c("region2")], table4[table4$Dataset == "CWMP",c("region2")], table4[table4$Dataset == "GLMMP",c("region1")], table4[table4$Dataset == "GLMMP",c("region3")], table4[table4$Dataset == "DWS",c("region1")], table4[table4$Dataset == "DWS",c("region2")]))` % (Table 4). The GLMMP models had the highest median adjusted pseudo-R2 values when applied to the other regions (`r round(median(c(table4[table4$Dataset == "GLMMP",c("region1")], table4[table4$Dataset == "GLMMP",c("region3")])), 0)` %), with median adjusted pseudo-R2 values of `r round(median(c(table4[table4$Dataset == "GLMMP",c("region1")])), 0)` % for CWMP data, and `r round(median(c(table4[table4$Dataset == "GLMMP",c("region3")])), 0)` % for DWS data. The CWMP models explained a median of `r round(median(c(table4[table4$Dataset == "CWMP",c("region2")], table4[table4$Dataset == "CWMP",c("region3")])), 0)` % of variation in other regions, including medians of `r round(median(c(table4[table4$Dataset == "CWMP",c("region3")])),0)` % for DWS data and `r round(median(c(table4[table4$Dataset == "CWMP",c("region2")])), 0)` % for GLMMP data. The DWS models explained a median of `r round(median(c(table4[table4$Dataset == "DWS",c("region1")], table4[table4$Dataset == "DWS",c("region2")])), 0)` % of variation in other regions, with medians of `r round(median(c(table4[table4$Dataset == "DWS",c("region1")])), 0)` % for the CWMP data and `r round(median(c(table4[table4$Dataset == "DWS",c("region2")])), 0)` % for the GLMMP data. The CWMP and DWS models explained the greatest amount of variation when applied to the region they were created in (with median explanatory powers of `r median(round(median(c(table4[table4$Dataset == "CWMP",c("region1")])), 0), round(median(c(table4[table4$Dataset == "DWS",c("region3")])), 0))` % in each case), while the GLMMP models explained more variation in other regions (median of `r round(median(c(table4[table4$Dataset == "GLMMP",c("region1")], table4[table4$Dataset == "GLMMP",c("region3")])), 0)` %) than in its own inland wetlands (median of `r round(median(c(table4[table4$Dataset == "GLMMP",c("region2")])), 0)` %).
+
+#Commonalities
+We found that certain variables were included in our selected models across species and across regions more consistently than others (Table 3). Emergent vegetation showed positive relationships with `r sum(t3$EV > 0 , na.rm = TRUE)` species abundances in which it was included while percentages of crop cover and forest cover showed negative relationships with all `r sum(t3$Crop < 0 , na.rm = TRUE)` and `r sum(t3$Forest < 0 , na.rm = TRUE)` species abundances, respectively (Figure 2, Appendix 3). Wetland area (`r sum(t3$Area < 0 , na.rm = TRUE)` out of `r sum(t3$Area < 0 | t3$Area > 0, na.rm = TRUE)` models), percentage of grassland (`r sum(t3$Grass < 0 , na.rm = TRUE)` out of `r sum(t3$Grass < 0 | t3$Grass > 0, na.rm = TRUE)` models), and alkali wetlands (`r sum(t3$Alk < 0 , na.rm = TRUE)` out of `r sum(t3$Alk < 0 | t3$Alk > 0, na.rm = TRUE)` models) likewise showed consistently negative relationships when included in models. Local habitat heterogeneity showed positive linear relationships or convex quadratic relationships—which are characterized by a positive linear relationship at small values of an explanatory variable—in `r sum(t3$LocalHet > 0 , na.rm = TRUE)` out of `r sum(t3$LocalHet < 0 | t3$LocalHet > 0, na.rm = TRUE)` models in which the variable was included. However, other variables showed greater disagreement in the directionality of the relationships between and even within species (Appendix 3). For example, while open water was included in `r sum(t3$OW < 0 | t3$OW > 0, na.rm = TRUE)` models, our models identified both positive (`r sum(t3$OW > 0, na.rm = TRUE)` models) and negative (`r sum(t3$OW < 0, na.rm = TRUE)` models) relationships with species abundances (Fig. 3). Shoreline/mudflat showed `r sum(t3$SM > 0, na.rm = TRUE)` positive relationships and `r sum(t3$SM < 0, na.rm = TRUE)` negative relationships, wet meadow showed `r sum(t3$WM > 0, na.rm = TRUE)` positive relationships and `r sum(t3$WM < 0, na.rm = TRUE)` negative relationship, and landscape heterogeneity showed positive linear (`r sum(t3$LandHet > 0 & t3$LandHet2 == 0, na.rm = TRUE)` models), negative linear (`r sum(t3$LandHet < 0 & t3$LandHet2 == 0, na.rm = TRUE)` models), positive quadratic (`r sum(t3$LandHet2 > 0, na.rm = TRUE)` model), and negative quadratic (`r sum(t3$LandHet2 < 0, na.rm = TRUE)` model) relationships.
+
+#Discussion:
+Given that some of these landscape-only models accounted for as much as `r max(table4$pseudoR2_Land)`% of variation in species densities, it may be reasonable to construct models for these species that are based solely on landscape-scale data, at least in these three regions. 
+
+However, in all cases our landscape-only models explained less variation than the models that used both local- and landscape-scale habitat characteristics (`r table4$pseudoR2_Land < table4$pseudoR2`).
+
+Emergent vegetation showed positive relationships with `r sum(t3$EV > 0 , na.rm = TRUE)` species abundances in which it was included
+
+Species-specific habitat models created from data collected in a given region explained more variation in the density of that species in that region than did habitat models created elsewhere in (`r round(pctInRegionBetter, 0)`% of cases.
+
+In contrast, percentages of landscape-scale land cover including cropland, forests, and grasslands were always negatively associated with species densities. (`r sum(t3$Crop < 0 , na.rm = TRUE)` and `r sum(t3$Forest < 0 , na.rm = TRUE)` species abundances; `r sum(t3$Grass < 0 , na.rm = TRUE)` out of `r sum(t3$Grass < 0 | t3$Grass > 0, na.rm = TRUE)`)
+
+Similarly, though we found that area was included as a covariate in only six out of 12 top models, we found both positive andconsistently negative relationships with species abundances. (`r sum(t3$Area < 0 , na.rm = TRUE)`)
+
+```{r}
+library(sessioninfo)
+sessionInfo()
+```
